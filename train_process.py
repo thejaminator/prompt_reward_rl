@@ -1,3 +1,4 @@
+import pandas as pd
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -80,6 +81,10 @@ def main() -> None:
         path=moderated_path, basemodel=ProcessedWithModeration
     )
     with_rewards: Slist[ProcessedWithReward] = moderated.map(assign_reward)
+    rewards_to_analyse: Slist[float] = with_rewards.map(lambda x: x.reward)
+    # Use pandas to describe 25, 50, 75 percentiles
+    print(f"Rewards summary for {rewards_to_analyse.length} completions")
+    print(pd.Series(rewards_to_analyse).describe())
     prompt_completions: Slist[PromptCompletion] = with_rewards.map(
         reward_to_prompt_completion
     )

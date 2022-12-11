@@ -7,3 +7,4 @@ mypy == 0.991
 types-retry==0.9.9
 types-requests==2.28.11.5
 requests==2.28.1
+pandas==1.5.2
