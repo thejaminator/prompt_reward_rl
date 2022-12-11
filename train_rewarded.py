@@ -4,7 +4,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from slist import Slist
 
-from api.dataset_paths import moderated_completions
+from api.dataset_paths import moderated_harmless_rejected
 from api.json import read_jsonl_file_into_basemodel
 from api.logged_fine_tune import logged_fine_tune
 from api.moderations import OpenAIModeration
@@ -61,7 +61,7 @@ def format_rewarded_prompt_completion(
 ) -> PromptCompletion:
     # 2 d.p
     reward_formatted = f"{reward:.2f}"
-    new_prompt = f"{prompt}\nReward: {reward_formatted}"
+    new_prompt = f"{prompt}\nReward: {reward_formatted}\n"
     return PromptCompletion(prompt=new_prompt, completion=completion)
 
 
@@ -82,17 +82,27 @@ def reward_to_prompt_completion(with_reward: ProcessedWithReward) -> PromptCompl
 
 
 def main() -> None:
-    moderated_path: Path = moderated_completions
+    moderated_path: Path = moderated_harmless_rejected
     moderated: Slist[ProcessedWithModeration] = read_jsonl_file_into_basemodel(
         path=moderated_path, basemodel=ProcessedWithModeration
     )
-    with_rewards: Slist[ProcessedWithReward] = moderated.map(assign_reward)
+    with_rewards: Slist[ProcessedWithReward] = moderated.map(assign_reward).shuffle()
     rewards_to_analyse: Slist[float] = with_rewards.map(lambda x: x.reward)
+    print(
+        f"Number with less than 0.9 reward: {len(rewards_to_analyse.filter(lambda x: x < 0.7))}"
+    )
     # Use pandas to describe 25, 50, 75 percentiles
     print(f"Rewards summary for {rewards_to_analyse.length} completions")
     print(pd.Series(rewards_to_analyse).describe())
-    # TODO: Make it roughly 50/50 for good and bad?
-    prompt_completions: Slist[PromptCompletion] = with_rewards.map(
+    # Make it roughly 50/50 for those that have rewards less than 0.9
+    less_than_0_9, more_than_0_9 = with_rewards.split_by(lambda x: x.reward < 0.9)
+    print(f"Less than 0.9: {less_than_0_9.length}")
+    print(f"More than 0.9: {more_than_0_9.length}")
+    truncated_more_than_0_9 = more_than_0_9.take(less_than_0_9.length)
+    final_with_rewards = less_than_0_9 + truncated_more_than_0_9
+    print(f"Final with rewards: {final_with_rewards.length}")
+
+    prompt_completions: Slist[PromptCompletion] = final_with_rewards.map(
         reward_to_prompt_completion
     )
     finetune_params = FineTuneParams(
@@ -107,7 +117,7 @@ def main() -> None:
         params=finetune_params,
         project_name="reverse_rl",
         completion_start_token="",
-        completion_end_token="",
+        completion_end_token=" END",
     )
 
 

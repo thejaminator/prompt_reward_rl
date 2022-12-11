@@ -6,7 +6,7 @@ from slist import Slist
 
 from api.json import write_jsonl_file_from_basemodel
 from api.moderations import OpenAIModeration, get_moderations_retry
-from api.dataset_paths import anthropic_harmless_path, moderated_completions
+from api.dataset_paths import anthropic_harmless_path, moderated_harmless_rejected
 
 
 class AnthropicRawFormat(BaseModel):
@@ -68,12 +68,17 @@ if __name__ == "__main__":
     print(f"Getting moderations for {len(to_moderate)} items")
     moderated: Slist[ProcessedWithModeration] = to_moderate.par_map(
         lambda x: ProcessedWithModeration(
-            processed=x, moderation=get_moderations_retry(text=x.last_assistant)
+            processed=x,
+            moderation=get_moderations_retry(
+                # Include both to calculate moderation / "reward"
+                # Though maybe you only need the last_assistant?
+                text=x.last_human + "\n" + x.last_assistant
+            ),
         ),
         executor=threadpool,
     )
     # write to file
-    moderated_path: Path = moderated_completions
+    moderated_path: Path = moderated_harmless_rejected
     write_jsonl_file_from_basemodel(path=moderated_path, basemodels=moderated)
 
     print(f"Wrote {len(moderated)} items to {moderated_path}")
