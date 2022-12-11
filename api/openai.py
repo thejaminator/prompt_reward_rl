@@ -123,6 +123,7 @@ def get_moderations(text: str, auth_key: str = DEFAULT_AUTH_KEY) -> OpenAIModera
 def get_moderations_retry(
     text: str, auth_key: str = DEFAULT_AUTH_KEY
 ) -> OpenAIModeration:
+    print("Done")
     return get_moderations(text, auth_key)
 
 
