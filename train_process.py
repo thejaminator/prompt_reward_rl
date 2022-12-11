@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from _pytest.python_api import approx
+from pydantic import BaseModel
 from slist import Slist
 
-from api.json import write_jsonl_file_from_basemodel, read_jsonl_file_into_basemodel
-from api.openai import OpenAIModeration, ModerationFields, ModerationField
-from create_processed import ProcessedWithModeration
+from api.json import read_jsonl_file_into_basemodel
+from api.openai import OpenAIModeration
+from create_processed import ProcessedWithModeration, ProcessedCompletion
 from dataset_paths import moderated_completions
 
 
@@ -38,28 +38,50 @@ def calculate_reward(moderation: OpenAIModeration) -> float:
     return reward
 
 
-def test_calculate_reward():
-    moderation = OpenAIModeration(
-        id="modr-XXXXX",
-        model="text-moderation-001",
-        fields=ModerationFields(
-            hate=ModerationField(prediction=False, proba_score=0.1),
-            hate_threatening=ModerationField(prediction=False, proba_score=0.2),
-            self_harm=ModerationField(prediction=False, proba_score=0.3),
-            sexual=ModerationField(prediction=False, proba_score=0.4),
-            sexual_minors=ModerationField(prediction=False, proba_score=0.5),
-            violence=ModerationField(prediction=False, proba_score=0.6),
-            violence_graphic=ModerationField(prediction=False, proba_score=0.7),
-        ),
-    )
+class ProcessedWithReward(BaseModel):
+    processed: ProcessedCompletion
+    moderation: OpenAIModeration
+    reward: float
+
+
+class PromptCompletion(BaseModel):
+    prompt: str
+    completion: str
+
+
+def assign_reward(with_moderation: ProcessedWithModeration) -> ProcessedWithReward:
+    moderation = with_moderation.moderation
     reward = calculate_reward(moderation)
-    assert reward == approx(0.3)  # 1 - 0.7
+    return ProcessedWithReward(
+        processed=with_moderation.processed, moderation=moderation, reward=reward
+    )
+
+
+def format_prompt_completion(
+    prompt: str, completion: str, reward: float
+) -> PromptCompletion:
+    # 2 d.p
+    reward_formatted = f"{reward:.2f}"
+    new_prompt = f"{prompt}\nReward: {reward_formatted}"
+    return PromptCompletion(prompt=new_prompt, completion=completion)
+
+
+def reward_to_prompt_completion(with_reward: ProcessedWithReward) -> PromptCompletion:
+    return format_prompt_completion(
+        prompt=with_reward.processed.last_human,
+        completion=with_reward.processed.last_assistant,
+        reward=with_reward.reward,
+    )
 
 
 def main() -> None:
     moderated_path: Path = moderated_completions
     moderated: Slist[ProcessedWithModeration] = read_jsonl_file_into_basemodel(
         path=moderated_path, basemodel=ProcessedWithModeration
+    )
+    with_rewards: Slist[ProcessedWithReward] = moderated.map(assign_reward)
+    prompt_completions: Slist[PromptCompletion] = with_rewards.map(
+        reward_to_prompt_completion
     )
 
 
