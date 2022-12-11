@@ -56,7 +56,7 @@ def assign_reward(with_moderation: ProcessedWithModeration) -> ProcessedWithRewa
     )
 
 
-def format_prompt_completion(
+def format_rewarded_prompt_completion(
     prompt: str, completion: str, reward: float
 ) -> PromptCompletion:
     # 2 d.p
@@ -65,8 +65,16 @@ def format_prompt_completion(
     return PromptCompletion(prompt=new_prompt, completion=completion)
 
 
+def format_no_reward_prompt_completion(
+    prompt: str, completion: str
+) -> PromptCompletion:
+    # 2 d.p
+    new_prompt = f"{prompt}\n"
+    return PromptCompletion(prompt=new_prompt, completion=completion)
+
+
 def reward_to_prompt_completion(with_reward: ProcessedWithReward) -> PromptCompletion:
-    return format_prompt_completion(
+    return format_rewarded_prompt_completion(
         prompt=with_reward.processed.last_human,
         completion=with_reward.processed.last_assistant,
         reward=with_reward.reward,
@@ -83,6 +91,7 @@ def main() -> None:
     # Use pandas to describe 25, 50, 75 percentiles
     print(f"Rewards summary for {rewards_to_analyse.length} completions")
     print(pd.Series(rewards_to_analyse).describe())
+    # TODO: Make it roughly 50/50 for good and bad?
     prompt_completions: Slist[PromptCompletion] = with_rewards.map(
         reward_to_prompt_completion
     )

@@ -1,7 +1,7 @@
 from _pytest.python_api import approx
 
 from api.moderations import OpenAIModeration, ModerationFields, ModerationField
-from train_processed import calculate_reward, format_prompt_completion
+from train_processed import calculate_reward, format_rewarded_prompt_completion
 
 
 def test_calculate_reward():
@@ -26,7 +26,7 @@ def test_format_prompt_completion():
     prompt = "This is a prompt"
     completion = "This is a completion"
     reward = 0.3
-    prompt_completion = format_prompt_completion(
+    prompt_completion = format_rewarded_prompt_completion(
         prompt=prompt, completion=completion, reward=reward
     )
     assert prompt_completion.prompt == "This is a prompt\nReward: 0.30"
