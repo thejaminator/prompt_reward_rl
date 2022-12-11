@@ -4,12 +4,13 @@ from pathlib import Path
 from pydantic import BaseModel
 from slist import Slist
 
+from api.dataset_paths import moderated_completions
 from api.json import read_jsonl_file_into_basemodel
 from api.logged_fine_tune import logged_fine_tune
 from api.moderations import OpenAIModeration
 from api.openai_fine_tune import FineTuneParams
+from api.prompt_completion import PromptCompletion
 from create_processed import ProcessedWithModeration, ProcessedCompletion
-from dataset_paths import moderated_completions
 
 
 def calculate_reward(moderation: OpenAIModeration) -> float:
@@ -45,11 +46,6 @@ class ProcessedWithReward(BaseModel):
     processed: ProcessedCompletion
     moderation: OpenAIModeration
     reward: float
-
-
-class PromptCompletion(BaseModel):
-    prompt: str
-    completion: str
 
 
 def assign_reward(with_moderation: ProcessedWithModeration) -> ProcessedWithReward:

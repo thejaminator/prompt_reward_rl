@@ -62,7 +62,7 @@ def raw_to_processed(raw: AnthropicRawFormat) -> ProcessedCompletion:
 if __name__ == "__main__":
     raw: Slist[AnthropicRawFormat] = get_raw_anthropic()
     processed: Slist[ProcessedCompletion] = raw.map(raw_to_processed)
-    to_moderate: Slist[ProcessedCompletion] = processed
+    to_moderate: Slist[ProcessedCompletion] = processed.take(50)
     # moderate
     threadpool = ThreadPoolExecutor(max_workers=30)
     print(f"Getting moderations for {len(to_moderate)} items")
@@ -76,4 +76,4 @@ if __name__ == "__main__":
     moderated_path: Path = moderated_completions
     write_jsonl_file_from_basemodel(path=moderated_path, basemodels=moderated)
 
-    print(processed.length)
+    print(f"Wrote {len(moderated)} items to {moderated_path}")
