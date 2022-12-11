@@ -1,0 +1,2 @@
+pydantic==1.10.2
+slist==0.1.2
