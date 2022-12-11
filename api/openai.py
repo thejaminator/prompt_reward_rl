@@ -1,3 +1,5 @@
+from typing import Any
+
 import requests as requests
 from pydantic import BaseModel
 from retry import retry
@@ -93,7 +95,7 @@ def get_moderations(text: str, auth_key: str = DEFAULT_AUTH_KEY) -> OpenAIModera
     json = request.json()
     if rcode == 429:
         error_data = json["error"]
-        return RateLimitError(error_data.get("message"))
+        raise RateLimitError(error_data.get("message"))
     # parse it into a nicer format
     id = json["id"]
     model = json["model"]
@@ -124,7 +126,7 @@ def get_moderations_retry(
     return get_moderations(text, auth_key)
 
 
-def _parse_openai_field(raw_json: dict, field_name: str) -> ModerationField:
+def _parse_openai_field(raw_json: dict[str, Any], field_name: str) -> ModerationField:
     return ModerationField(
         prediction=raw_json["results"][0]["categories"][field_name],
         proba_score=raw_json["results"][0]["category_scores"][field_name],
