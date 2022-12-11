@@ -1,5 +1,6 @@
 import requests as requests
 from pydantic import BaseModel
+from retry import retry
 
 from settings import OPENAI_KEY
 
@@ -70,6 +71,10 @@ class OpenAIModeration(BaseModel):
 DEFAULT_AUTH_KEY = OPENAI_KEY
 
 
+class RateLimitError(Exception):
+    pass
+
+
 def get_moderations(text: str, auth_key: str = DEFAULT_AUTH_KEY) -> OpenAIModeration:
     """
     e.g.
@@ -84,7 +89,11 @@ def get_moderations(text: str, auth_key: str = DEFAULT_AUTH_KEY) -> OpenAIModera
         headers={"Authorization": f"Bearer {auth_key}"},
         json={"input": text},
     )
+    rcode = request.status_code
     json = request.json()
+    if rcode == 429:
+        error_data = json["error"]
+        return RateLimitError(error_data.get("message"))
     # parse it into a nicer format
     id = json["id"]
     model = json["model"]
@@ -95,6 +104,7 @@ def get_moderations(text: str, auth_key: str = DEFAULT_AUTH_KEY) -> OpenAIModera
     sexual_minors_field = _parse_openai_field(json, "sexual/minors")
     violence_field = _parse_openai_field(json, "violence")
     violence_graphic_field = _parse_openai_field(json, "violence/graphic")
+
     fields = ModerationFields(
         hate=hate_field,
         hate_threatening=hate_threatening_field,
@@ -105,6 +115,13 @@ def get_moderations(text: str, auth_key: str = DEFAULT_AUTH_KEY) -> OpenAIModera
         violence_graphic=violence_graphic_field,
     )
     return OpenAIModeration(id=id, model=model, fields=fields)
+
+
+@retry(tries=3, delay=10, backoff=1.5, exceptions=RateLimitError)
+def get_moderations_retry(
+    text: str, auth_key: str = DEFAULT_AUTH_KEY
+) -> OpenAIModeration:
+    return get_moderations(text, auth_key)
 
 
 def _parse_openai_field(raw_json: dict, field_name: str) -> ModerationField:

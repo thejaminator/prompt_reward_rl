@@ -1,8 +1,12 @@
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import List
 
 from pydantic import BaseModel
 from slist import Slist
 
+from api.json import write_jsonl_file_from_basemodel
+from api.openai import OpenAIModeration, get_moderations, get_moderations_retry
 from dataset_paths import anthropic_harmless_path
 
 
@@ -15,10 +19,10 @@ class ProcessedCompletion(BaseModel):
     first_human: str  # First human query
     first_assistant: str  # First response
 
-class ProcessedCompletion(BaseModel):
-    first_human: str  # First human query
-    first_assistant: str  # First response
 
+class ProcessedWithModeration(BaseModel):
+    processed: ProcessedCompletion
+    moderation: OpenAIModeration
 
 
 def get_raw_anthropic() -> Slist[AnthropicRawFormat]:
@@ -57,4 +61,18 @@ def raw_to_processed(raw: AnthropicRawFormat) -> ProcessedCompletion:
 if __name__ == "__main__":
     raw: Slist[AnthropicRawFormat] = get_raw_anthropic()
     processed: Slist[ProcessedCompletion] = raw.map(raw_to_processed)
+    # shuffle and take 100
+    to_moderate: Slist[ProcessedCompletion] = processed.shuffle().take(100)
+    # moderate
+    threadpool = ThreadPoolExecutor(max_workers=10)
+    moderated: Slist[ProcessedWithModeration] = to_moderate.par_map(
+        lambda x: ProcessedWithModeration(
+            processed=x, moderation=get_moderations_retry(text=x.first_assistant)
+        ),
+        executor=threadpool,
+    )
+    # write to file
+    moderated_path: Path = Path("anthropic_moderated.jsonl")
+    write_jsonl_file_from_basemodel(path=moderated_path, basemodels=moderated)
+
     print(processed.length)
