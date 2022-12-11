@@ -6,7 +6,7 @@ from slist import Slist
 
 from api.json import write_jsonl_file_from_basemodel
 from api.openai import OpenAIModeration, get_moderations_retry
-from dataset_paths import anthropic_helpful_path, anthropic_harmless_path
+from dataset_paths import anthropic_helpful_path, anthropic_harmless_path, moderated_completions
 
 
 class AnthropicRawFormat(BaseModel):
@@ -73,7 +73,7 @@ if __name__ == "__main__":
         executor=threadpool,
     )
     # write to file
-    moderated_path: Path = Path("anthropic_moderated.jsonl")
+    moderated_path: Path = moderated_completions
     write_jsonl_file_from_basemodel(path=moderated_path, basemodels=moderated)
 
     print(processed.length)
