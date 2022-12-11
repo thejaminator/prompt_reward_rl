@@ -116,7 +116,7 @@ def get_moderations(text: str, auth_key: str = DEFAULT_OPENAI_KEY) -> OpenAIMode
     return OpenAIModeration(id=id, model=model, fields=fields)
 
 
-@retry(tries=6, delay=10, backoff=2, exceptions=RateLimitError)
+@retry(tries=6, delay=10, backoff=1.5, exceptions=RateLimitError)
 def get_moderations_retry(
     text: str, auth_key: str = DEFAULT_OPENAI_KEY
 ) -> OpenAIModeration:

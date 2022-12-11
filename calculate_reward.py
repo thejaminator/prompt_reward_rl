@@ -64,15 +64,15 @@ if __name__ == "__main__":
     processed: Slist[ProcessedCompletion] = raw.map(raw_to_processed)
     to_moderate: Slist[ProcessedCompletion] = processed
     # moderate
-    threadpool = ThreadPoolExecutor(max_workers=30)
+    threadpool = ThreadPoolExecutor(max_workers=20)
     print(f"Getting moderations for {len(to_moderate)} items")
     moderated: Slist[ProcessedWithModeration] = to_moderate.par_map(
         lambda x: ProcessedWithModeration(
             processed=x,
             moderation=get_moderations_retry(
-                # Include both to calculate moderation / "reward"
-                # Though maybe you only need the last_assistant?
-                text=x.last_human + "\n" + x.last_assistant
+                # In future, maybe use both human and assistant.
+                # But the RM needs to be better
+                text=x.last_assistant
             ),
         ),
         executor=threadpool,

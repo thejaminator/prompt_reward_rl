@@ -101,6 +101,7 @@ def main() -> None:
     truncated_more_than_0_9 = more_than_0_9.take(less_than_0_9.length)
     final_with_rewards = less_than_0_9 + truncated_more_than_0_9
     print(f"Final with rewards: {final_with_rewards.length}")
+    print(pd.Series(final_with_rewards.map(lambda x: x.reward)).describe())
 
     prompt_completions: Slist[PromptCompletion] = final_with_rewards.map(
         reward_to_prompt_completion
@@ -109,13 +110,13 @@ def main() -> None:
         model="babbage",
         n_epochs=1,
         learning_rate_multiplier=0.1,
-        batch_size=128,
+        batch_size=64,
         prompt_loss_weight=0.1,
     )
     logged_fine_tune(
         train=prompt_completions,
         params=finetune_params,
-        project_name="reverse_rl",
+        project_name="reverse-rl",
         completion_start_token="",
         completion_end_token=" END",
     )
