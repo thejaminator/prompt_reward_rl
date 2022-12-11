@@ -1,4 +1,4 @@
-from api.openai import get_moderations, OpenAIModeration
+from api.moderations import get_moderations, OpenAIModeration
 
 
 def test_get_moderations():

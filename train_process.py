@@ -5,7 +5,9 @@ from pydantic import BaseModel
 from slist import Slist
 
 from api.json import read_jsonl_file_into_basemodel
-from api.openai import OpenAIModeration
+from api.logged_fine_tune import logged_fine_tune
+from api.moderations import OpenAIModeration
+from api.openai_fine_tune import FineTuneParams
 from create_processed import ProcessedWithModeration, ProcessedCompletion
 from dataset_paths import moderated_completions
 
@@ -87,6 +89,20 @@ def main() -> None:
     print(pd.Series(rewards_to_analyse).describe())
     prompt_completions: Slist[PromptCompletion] = with_rewards.map(
         reward_to_prompt_completion
+    )
+    finetune_params = FineTuneParams(
+        model="babbage",
+        n_epochs=1,
+        learning_rate_multiplier=0.1,
+        batch_size=128,
+        prompt_loss_weight=0.1,
+    )
+    logged_fine_tune(
+        train=prompt_completions,
+        params=finetune_params,
+        project_name="reverse_rl",
+        completion_start_token="",
+        completion_end_token="",
     )
 
 

@@ -5,12 +5,12 @@ from pydantic import BaseModel
 from slist import Slist
 
 from api.json import write_jsonl_file_from_basemodel
-from api.openai import OpenAIModeration, get_moderations_retry
-from dataset_paths import anthropic_helpful_path, anthropic_harmless_path, moderated_completions
+from api.moderations import OpenAIModeration, get_moderations_retry
+from dataset_paths import anthropic_harmless_path, moderated_completions
 
 
 class AnthropicRawFormat(BaseModel):
-    rejected: str
+    chosen: str
     rejected: str
 
 

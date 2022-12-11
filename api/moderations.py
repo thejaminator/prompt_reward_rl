@@ -4,7 +4,7 @@ import requests as requests
 from pydantic import BaseModel
 from retry import retry
 
-from settings import OPENAI_KEY
+from settings import DEFAULT_OPENAI_KEY
 
 
 class ModerationField(BaseModel):
@@ -70,14 +70,11 @@ class OpenAIModeration(BaseModel):
     fields: ModerationFields
 
 
-DEFAULT_AUTH_KEY = OPENAI_KEY
-
-
 class RateLimitError(Exception):
     pass
 
 
-def get_moderations(text: str, auth_key: str = DEFAULT_AUTH_KEY) -> OpenAIModeration:
+def get_moderations(text: str, auth_key: str = DEFAULT_OPENAI_KEY) -> OpenAIModeration:
     """
     e.g.
     curl https://api.openai.com/v1/moderations \
@@ -121,7 +118,7 @@ def get_moderations(text: str, auth_key: str = DEFAULT_AUTH_KEY) -> OpenAIModera
 
 @retry(tries=6, delay=10, backoff=2, exceptions=RateLimitError)
 def get_moderations_retry(
-    text: str, auth_key: str = DEFAULT_AUTH_KEY
+    text: str, auth_key: str = DEFAULT_OPENAI_KEY
 ) -> OpenAIModeration:
     print("Done")
     return get_moderations(text, auth_key)

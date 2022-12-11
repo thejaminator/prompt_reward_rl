@@ -1,4 +1,4 @@
-from api.openai import ModerationField, _parse_openai_field
+from api.moderations import ModerationField, _parse_openai_field
 
 
 def test_parse_openai_field():
