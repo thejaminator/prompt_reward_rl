@@ -88,10 +88,23 @@ def get_moderations(text: str, auth_key: str = DEFAULT_AUTH_KEY) -> OpenAIModera
     # parse it into a nicer format
     id = json["id"]
     model = json["model"]
-    hate_field = ModerationField(
-        prediction=json["results"][0]["categories"]["hate"],
-        proba_score=json["results"][0]["category_scores"]["hate"],
+    hate_field = _parse_openai_field(json, "hate")
+    hate_threatening_field = _parse_openai_field(json, "hate/threatening")
+    self_harm_field = _parse_openai_field(json, "self-harm")
+    sexual_field = _parse_openai_field(json, "sexual")
+    sexual_minors_field = _parse_openai_field(json, "sexual/minors")
+    violence_field = _parse_openai_field(json, "violence")
+    violence_graphic_field = _parse_openai_field(json, "violence/graphic")
+    fields = ModerationFields(
+        hate=hate_field,
+        hate_threatening=hate_threatening_field,
+        self_harm=self_harm_field,
+        sexual=sexual_field,
+        sexual_minors=sexual_minors_field,
+        violence=violence_field,
+        violence_graphic=violence_graphic_field,
     )
+    return OpenAIModeration(id=id, model=model, fields=fields)
 
 
 def _parse_openai_field(raw_json: dict, field_name: str) -> ModerationField:
@@ -99,36 +112,3 @@ def _parse_openai_field(raw_json: dict, field_name: str) -> ModerationField:
         prediction=raw_json["results"][0]["categories"][field_name],
         proba_score=raw_json["results"][0]["category_scores"][field_name],
     )
-
-
-def test_parse_openai_field():
-    test_dict = {
-        "id": "modr-6M9WCFPleGTp0299OAyNCcGieOqv3",
-        "model": "text-moderation-004",
-        "results": [
-            {
-                "categories": {
-                    "hate": False,
-                    "hate/threatening": False,
-                    "self-harm": False,
-                    "sexual": False,
-                    "sexual/minors": False,
-                    "violence": False,
-                    "violence/graphic": False,
-                },
-                "category_scores": {
-                    "hate": 3.7888854421908036e-05,
-                    "hate/threatening": 2.24931300181197e-05,
-                    "self-harm": 0.00020809986745007336,
-                    "sexual": 2.9429097594402265e-06,
-                    "sexual/minors": 4.750487789806357e-07,
-                    "violence": 0.4000481367111206,
-                    "violence/graphic": 0.006268431898206472,
-                },
-                "flagged": False,
-            }
-        ],
-    }
-    parsed: ModerationField = _parse_openai_field(test_dict, "hate")
-    assert parsed.prediction is False
-    assert parsed.proba_score == 3.7888854421908036e-05
