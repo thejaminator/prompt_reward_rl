@@ -6,7 +6,7 @@ from slist import Slist
 
 from api.json import write_jsonl_file_from_basemodel
 from api.moderations import OpenAIModeration, get_moderations_retry
-from dataset_paths import anthropic_harmless_path, moderated_completions
+from api.dataset_paths import anthropic_harmless_path, moderated_completions
 
 
 class AnthropicRawFormat(BaseModel):
