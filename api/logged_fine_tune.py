@@ -13,7 +13,7 @@ from openai.validators import get_common_xfix
 from api.openai_fine_tune import ModelId, FineTuneParams, fine_tune_result, await_fine_tune_finish, fine_tune
 from api.set_key import set_openai_key
 from settings import NEPTUNE_KEY, DEFAULT_OPENAI_KEY
-from train_process import PromptCompletion
+from train_processed import PromptCompletion
 
 """Calls openai to finetune a model. Makes sure to log hyperparameters and the data to neptune."""
 
