@@ -15,6 +15,11 @@ class ProcessedCompletion(BaseModel):
     first_human: str  # First human query
     first_assistant: str  # First response
 
+class ProcessedCompletion(BaseModel):
+    first_human: str  # First human query
+    first_assistant: str  # First response
+
+
 
 def get_raw_anthropic() -> Slist[AnthropicRawFormat]:
     # read from anthropic_harmless_path
