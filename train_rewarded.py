@@ -10,7 +10,7 @@ from api.logged_fine_tune import logged_fine_tune
 from api.moderations import OpenAIModeration
 from api.openai_fine_tune import FineTuneParams
 from api.prompt_completion import PromptCompletion
-from create_processed import ProcessedWithModeration, ProcessedCompletion
+from calculate_reward import ProcessedWithModeration, ProcessedCompletion
 
 
 def calculate_reward(moderation: OpenAIModeration) -> float:
