@@ -61,10 +61,10 @@ def raw_to_processed(raw: AnthropicRawFormat) -> ProcessedCompletion:
 if __name__ == "__main__":
     raw: Slist[AnthropicRawFormat] = get_raw_anthropic()
     processed: Slist[ProcessedCompletion] = raw.map(raw_to_processed)
-    # shuffle and take 100
-    to_moderate: Slist[ProcessedCompletion] = processed.shuffle().take(100)
+    to_moderate: Slist[ProcessedCompletion] = processed
     # moderate
-    threadpool = ThreadPoolExecutor(max_workers=10)
+    threadpool = ThreadPoolExecutor(max_workers=30)
+    print(f"Getting moderations for {len(to_moderate)} items")
     moderated: Slist[ProcessedWithModeration] = to_moderate.par_map(
         lambda x: ProcessedWithModeration(
             processed=x, moderation=get_moderations_retry(text=x.first_assistant)
