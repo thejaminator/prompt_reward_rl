@@ -11,3 +11,4 @@ db/
 config.py
 .dmypy.json
 datasets
+.env
