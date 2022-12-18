@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from slist import Slist
 
 from api.dataset_paths import moderated_harmless_rejected
-from api.json import read_jsonl_file_into_basemodel
+from api.json_operations import read_jsonl_file_into_basemodel
 from api.logged_fine_tune import logged_fine_tune
 from api.moderations import OpenAIModeration
 from api.openai_fine_tune import FineTuneParams
@@ -108,7 +108,7 @@ def main() -> None:
     )
     finetune_params = FineTuneParams(
         model="babbage",
-        n_epochs=1,
+        n_epochs=4,
         learning_rate_multiplier=0.1,
         batch_size=64,
         prompt_loss_weight=0.1,
@@ -122,5 +122,5 @@ def main() -> None:
     )
 
 
-if __name__ == "__main__":
+if __naame__ == "__main__":
     main()

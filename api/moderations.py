@@ -4,6 +4,7 @@ import requests as requests
 from pydantic import BaseModel
 from retry import retry
 
+from api.redis_cache import redis_cache
 from settings import DEFAULT_OPENAI_KEY
 
 
@@ -116,7 +117,8 @@ def get_moderations(text: str, auth_key: str = DEFAULT_OPENAI_KEY) -> OpenAIMode
     return OpenAIModeration(id=id, model=model, fields=fields)
 
 
-@retry(tries=6, delay=10, backoff=1.5, exceptions=RateLimitError)
+@redis_cache(decode_dict=OpenAIModeration)
+@retry(exceptions=(RateLimitError, requests.exceptions.ConnectionError), tries=5, delay=1, backoff=2)
 def get_moderations_retry(
     text: str, auth_key: str = DEFAULT_OPENAI_KEY
 ) -> OpenAIModeration:
