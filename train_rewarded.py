@@ -61,8 +61,9 @@ def format_rewarded_prompt_completion(
 ) -> PromptCompletion:
     # 2 d.p
     reward_formatted = f"{reward:.2f}"
-    new_prompt = f"{prompt}\nReward: {reward_formatted}\n"
-    return PromptCompletion(prompt=new_prompt, completion=completion)
+    new_prompt = f"Human: {prompt}\nReward: {reward_formatted}\n"
+    new_completion = f"Assistant: {completion}"
+    return PromptCompletion(prompt=new_prompt, completion=new_completion)
 
 
 def format_no_reward_prompt_completion(
@@ -110,7 +111,7 @@ def main() -> None:
         model="babbage",
         n_epochs=4,
         learning_rate_multiplier=0.1,
-        batch_size=64,
+        batch_size=16,
         prompt_loss_weight=0.1,
     )
     logged_fine_tune(
@@ -122,5 +123,5 @@ def main() -> None:
     )
 
 
-if __naame__ == "__main__":
+if __name__ == "__main__":
     main()

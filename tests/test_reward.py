@@ -29,5 +29,5 @@ def test_format_prompt_completion():
     prompt_completion = format_rewarded_prompt_completion(
         prompt=prompt, completion=completion, reward=reward
     )
-    assert prompt_completion.prompt == "This is a prompt\nReward: 0.30"
-    assert prompt_completion.completion == "This is a completion"
+    assert prompt_completion.prompt == "Human: This is a prompt\nReward: 0.30\n"
+    assert prompt_completion.completion == "Assistant: This is a completion"
