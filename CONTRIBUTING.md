@@ -1,5 +1,5 @@
 
 # Run mypy
 ```shell
-dmypy run -- create_processed.py
+dmypy run -- calculate_reward.py
 ```

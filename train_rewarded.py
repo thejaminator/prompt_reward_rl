@@ -76,8 +76,8 @@ def format_no_reward_prompt_completion(
 
 def reward_to_prompt_completion(with_reward: ProcessedWithReward) -> PromptCompletion:
     return format_rewarded_prompt_completion(
-        prompt=with_reward.processed.last_human,
-        completion=with_reward.processed.last_assistant,
+        prompt=with_reward.processed.human,
+        completion=with_reward.processed.assistant,
         reward=with_reward.reward,
     )
 
@@ -109,7 +109,7 @@ def main() -> None:
     )
     finetune_params = FineTuneParams(
         model="babbage",
-        n_epochs=4,
+        n_epochs=8,
         learning_rate_multiplier=0.1,
         batch_size=16,
         prompt_loss_weight=0.1,
