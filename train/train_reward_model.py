@@ -25,7 +25,7 @@ def format_raw_into_prompt_completion(
     positive_example = raw.chosen
     positive_token = "1"
     negative_token = "0"
-    end_prompt_seperator = "\n\n###\n\n"
+    end_prompt_seperator = "<SOS>"
     negative_example = raw.rejected
     positive_prompt_completion = PromptCompletion(
         prompt=positive_example.strip() + end_prompt_seperator,
@@ -42,12 +42,13 @@ def main():
     limit = 10000
     harmless_helpful_train = get_harmless_helpful_train()
     print(f"Loaded {len(harmless_helpful_train)} harmless/helpful train examples")
-    prompt_completions: Slist[PromptCompletion] = harmless_helpful_train.map(
+    training_pairs: Slist[Slist[PromptCompletion]] = harmless_helpful_train.map(
         format_raw_into_prompt_completion
-    ).flatten_list()
-    print(f"Created {len(prompt_completions)} prompt completions")
-    limited_prompt_completions = prompt_completions.shuffle().take(limit)
-    print(f"Shuffled and took {len(limited_prompt_completions)} prompt completions")
+    )
+    print(f"Created {len(training_pairs)} training_pairs")
+    # Apply the limit here
+    limited_pairs: Slist[Slist[PromptCompletion]] = training_pairs.shuffle().take(limit)
+    print(f"Shuffled and limited. We now have {len(limited_pairs)} training pairs")
 
     finetune_params = FineTuneParams(
         model="babbage",
@@ -57,7 +58,7 @@ def main():
         prompt_loss_weight=0.1,
     )
     logged_fine_tune(
-        train=prompt_completions,
+        train=limited_pairs.flatten_list(),
         params=finetune_params,
         project_name="assistant-reward-model",
         completion_start_token="",
