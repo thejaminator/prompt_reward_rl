@@ -90,7 +90,7 @@ def main() -> None:
     with_rewards: Slist[ProcessedWithReward] = moderated.map(assign_reward).shuffle()
     rewards_to_analyse: Slist[float] = with_rewards.map(lambda x: x.reward)
     print(
-        f"Number with less than 0.9 reward: {len(rewards_to_analyse.filter(lambda x: x < 0.7))}"
+        f"Number with less than 0.7 reward: {len(rewards_to_analyse.filter(lambda x: x < 0.7))}"
     )
     # Use pandas to describe 25, 50, 75 percentiles
     print(f"Rewards summary for {rewards_to_analyse.length} completions")

@@ -25,9 +25,9 @@ class ProcessedWithModeration(BaseModel):
     moderation: OpenAIModeration
 
 
-def get_raw_anthropic() -> Slist[AnthropicRawFormat]:
+def get_raw_anthropic(path: Path) -> Slist[AnthropicRawFormat]:
     # read from anthropic_helpful_path
-    jsonl_path = anthropic_harmless_path
+    jsonl_path = path
     # read the jsonl file
     with open(jsonl_path, "r") as f:
         lines = f.readlines()
@@ -102,11 +102,12 @@ def raw_to_multiple_processed(text: str) -> Slist[ProcessedCompletion]:
 threadpool = ThreadPoolExecutor(max_workers=100)
 
 if __name__ == "__main__":
-    raw: Slist[AnthropicRawFormat] = get_raw_anthropic()
+    raw: Slist[AnthropicRawFormat] = get_raw_anthropic(anthropic_harmless_path)
     processed_rejected: Slist[ProcessedCompletion] = (
-        raw.map(lambda x: x.rejected).map(raw_to_single_processed).flatten_option()
+        raw.map(lambda x: x.rejected).map(raw_to_multiple_processed).flatten_list()
     )
     print(f"Number of processed_rejected: {len(processed_rejected)} out of {len(raw)}")
+    # Add the "chosen" data. Because only the last conversation is used, we can use the raw_to_single_processed function
     processed_chosen: Slist[ProcessedCompletion] = (
         raw.map(lambda x: x.chosen).map(raw_to_single_processed).flatten_option()
     )
