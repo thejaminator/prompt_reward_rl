@@ -39,7 +39,7 @@ def format_raw_into_prompt_completion(
 
 
 def main():
-    limit = 10000
+    limit = 100000
     harmless_helpful_train = get_harmless_helpful_train()
     print(f"Loaded {len(harmless_helpful_train)} harmless/helpful train examples")
     training_pairs: Slist[Slist[PromptCompletion]] = harmless_helpful_train.map(
@@ -60,9 +60,10 @@ def main():
     logged_fine_tune(
         train=limited_pairs.flatten_list(),
         params=finetune_params,
-        project_name="assistant-reward-model",
+        project_name="leadiq/assistant-reward-model",
         completion_start_token="",
-        completion_end_token=" END",
+        # no end token, we'll just call it using 1 token response length
+        completion_end_token="",
     )
 
 

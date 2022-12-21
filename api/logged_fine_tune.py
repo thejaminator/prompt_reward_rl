@@ -51,8 +51,6 @@ def logged_fine_tune(
     # To log more neptune info after finetune
     neptune_post_train_callable: NeptunePostTrainRunCallable = NeptunePostTrainDoNothing,  # To log more neptune info
 ) -> ModelId:
-    """See possible project_name on https://app.neptune.ai/o/leadiq/-/projects
-    returns the model id created"""
     set_openai_key(openai_key)
     # Take and train from a sample of the dataset
     print(f"Found {len(train)} training examples")
@@ -94,7 +92,7 @@ def logged_fine_tune(
             print("Got invalid input")
 
     run = neptune.new.init(
-        project=f"leadiq/{project_name}",
+        project=f"{project_name}",
         api_token=NEPTUNE_KEY,
         tags=["finetune"],
     )  # your credentials

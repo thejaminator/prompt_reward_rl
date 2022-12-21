@@ -117,7 +117,7 @@ def main() -> None:
     logged_fine_tune(
         train=prompt_completions,
         params=finetune_params,
-        project_name="reverse-rl",
+        project_name="leadiq/reverse-rl",
         completion_start_token="",
         completion_end_token=" END",
     )
