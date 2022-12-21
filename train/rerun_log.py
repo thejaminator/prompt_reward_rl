@@ -1,7 +1,7 @@
 import neptune
 import neptune.new
 
-from api.openai_fine_tune import await_fine_tune_finish, fine_tune_result
+from api.openai_fine_tune import await_fine_tune_finish, fine_tune_result, JobId
 from api.set_key import set_openai_key
 from settings import NEPTUNE_KEY, OPENAI_KEY
 
@@ -19,12 +19,12 @@ def rerun_neptune_log(
         with_id=neptune_run_id, project=f"{project_name}", api_token=neptune_api_key
     )
 
-    model_id = await_fine_tune_finish(openai_job_id)
+    model_id = await_fine_tune_finish(JobId(openai_job_id))
     print("Fine-tune succeeded")
     print(f"Uploaded model: {model_id}")
     run["model_id"] = model_id
 
-    result = fine_tune_result(openai_job_id)
+    result = fine_tune_result(JobId(openai_job_id))
     # Add metrics to draw charts
     for item in result.metrics:
         for k, v in item.dict().items():

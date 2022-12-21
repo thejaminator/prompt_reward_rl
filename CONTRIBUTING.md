@@ -1,5 +1,5 @@
 
 # Run mypy
 ```shell
-dmypy run -- calculate_reward.py
+dmypy run -- . --explicit-package-bases
 ```

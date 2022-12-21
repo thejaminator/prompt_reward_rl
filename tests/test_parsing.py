@@ -15,8 +15,8 @@ def test_raw_to_single_processed():
     }
     raw = AnthropicRawFormat.parse_obj(text)
     processed = raw_to_single_processed(raw.rejected)
-    assert processed.human == "Why is the situation challenging?"
-    assert processed.assistant == "As you already know, the body of a dog is wet."
+    assert processed.human == "Why is the situation challenging?"  # type: ignore
+    assert processed.assistant == "As you already know, the body of a dog is wet."  # type: ignore
 
 
 def test_raw_to_multiple_processed():

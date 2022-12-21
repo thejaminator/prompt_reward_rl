@@ -6,6 +6,8 @@ from api.openai_fine_tune import FineTuneParams
 from api.prompt_completion import PromptCompletion
 from calculate_reward import get_raw_anthropic, AnthropicRawFormat
 
+POSITIVE_TOKEN = "1"
+NEGATIVE_TOKEN = "0"
 
 def get_harmless_helpful_train() -> Slist[AnthropicRawFormat]:
     harmless_train: Slist[AnthropicRawFormat] = get_raw_anthropic(
@@ -23,8 +25,8 @@ def format_raw_into_prompt_completion(
     # the positive class is a good completion. aka chosen
     # the negative class is a bad completion. aka rejected
     positive_example = raw.chosen
-    positive_token = "1"
-    negative_token = "0"
+    positive_token = POSITIVE_TOKEN
+    negative_token = NEGATIVE_TOKEN
     end_prompt_seperator = "<SOS>"
     negative_example = raw.rejected
     positive_prompt_completion = PromptCompletion(
