@@ -1,6 +1,9 @@
 from slist import Slist
 
-from api.dataset_paths import anthropic_harmless_train_path, anthropic_helpful__train_path
+from api.dataset_paths import (
+    anthropic_harmless_train_path,
+    anthropic_helpful__train_path,
+)
 from api.logged_fine_tune import logged_fine_tune
 from api.openai_fine_tune import FineTuneParams
 from api.prompt_completion import PromptCompletion
@@ -9,14 +12,22 @@ from calculate_reward import get_raw_anthropic, AnthropicRawFormat
 POSITIVE_TOKEN = "1"
 NEGATIVE_TOKEN = "0"
 
+
 def get_harmless_helpful_train() -> Slist[AnthropicRawFormat]:
     harmless_train: Slist[AnthropicRawFormat] = get_raw_anthropic(
         anthropic_harmless_train_path
     )
     print(f"Loaded {len(harmless_train)} harmless train examples")
-    helpful_train: Slist[AnthropicRawFormat] = get_raw_anthropic(anthropic_helpful__train_path)
+    helpful_train: Slist[AnthropicRawFormat] = get_raw_anthropic(
+        anthropic_helpful__train_path
+    )
     print(f"Loaded {len(helpful_train)} helpful train examples")
     return harmless_train + helpful_train
+
+
+def format_dialogue_into_prompt(dialogue: str) -> str:
+    end_prompt_seperator = "<SOS>"
+    return dialogue.strip() + end_prompt_seperator
 
 
 def format_raw_into_prompt_completion(
@@ -26,15 +37,15 @@ def format_raw_into_prompt_completion(
     # the negative class is a bad completion. aka rejected
     positive_example = raw.chosen
     positive_token = POSITIVE_TOKEN
-    negative_token = NEGATIVE_TOKEN
-    end_prompt_seperator = "<SOS>"
     negative_example = raw.rejected
+    negative_token = NEGATIVE_TOKEN
+
     positive_prompt_completion = PromptCompletion(
-        prompt=positive_example.strip() + end_prompt_seperator,
+        prompt=format_dialogue_into_prompt(positive_example),
         completion=positive_token,
     )
     negative_prompt_completion = PromptCompletion(
-        prompt=negative_example.strip() + end_prompt_seperator,
+        prompt=format_dialogue_into_prompt(negative_example),
         completion=negative_token,
     )
     return Slist([positive_prompt_completion, negative_prompt_completion])

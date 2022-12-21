@@ -14,6 +14,9 @@ class AnthropicRawFormat(BaseModel):
     chosen: str
     rejected: str
 
+    class Config:
+        frozen = True
+
 
 class ProcessedCompletion(BaseModel):
     human: str  # First human query

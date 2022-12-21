@@ -12,7 +12,11 @@ from evaluate.inference import (
     TokenProba,
 )
 from settings import OPENAI_KEY
-from train.train_reward_model import POSITIVE_TOKEN, NEGATIVE_TOKEN
+from train.train_reward_model import (
+    POSITIVE_TOKEN,
+    NEGATIVE_TOKEN,
+    format_dialogue_into_prompt,
+)
 import numpy as np
 
 
@@ -49,8 +53,10 @@ def get_positive_class_proba(model_id: str, prompt: str) -> float:
 
 def get_pair_predicted_chosen(model_id: str, pair: AnthropicRawFormat) -> bool:
     """Returns true if the model predicts the chosen completion"""
-    chosen_proba = get_positive_class_proba(model_id, pair.chosen)
-    rejected_proba = get_positive_class_proba(model_id, pair.rejected)
+    formatted_chosen_prompt = format_dialogue_into_prompt(pair.chosen)
+    chosen_proba = get_positive_class_proba(model_id, formatted_chosen_prompt)
+    formatted_rejected_prompt = format_dialogue_into_prompt(pair.rejected)
+    rejected_proba = get_positive_class_proba(model_id, formatted_rejected_prompt)
     return chosen_proba > rejected_proba
 
 
@@ -67,8 +73,10 @@ def main(limit: int, model_id: str, openai_api_key: str):
 
 
 if __name__ == "__main__":
+    # Model on 80k samples babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26 0.67
+    # Model on 10k samples babbage:ft-leadiq:assistant-reward-model-2022-12-19-15-51-58 0.6
     main(
         limit=100,
-        model_id="babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26",
+        model_id="babbage:ft-leadiq:assistant-reward-model-2022-12-19-15-51-58",
         openai_api_key=OPENAI_KEY,
     )

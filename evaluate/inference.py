@@ -1,7 +1,7 @@
 from typing import Optional, Dict, Any, List, Union
 
 import openai
-from pydantic import BaseModel
+from pydantic import BaseModel, conlist
 from slist import Slist
 from slist.pydantic_compat import SlistPydantic
 
