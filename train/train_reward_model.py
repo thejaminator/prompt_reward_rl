@@ -1,6 +1,6 @@
 from slist import Slist
 
-from api.dataset_paths import anthropic_harmless_path, anthropic_helpful_path
+from api.dataset_paths import anthropic_harmless_train_path, anthropic_helpful__train_path
 from api.logged_fine_tune import logged_fine_tune
 from api.openai_fine_tune import FineTuneParams
 from api.prompt_completion import PromptCompletion
@@ -9,10 +9,10 @@ from calculate_reward import get_raw_anthropic, AnthropicRawFormat
 
 def get_harmless_helpful_train() -> Slist[AnthropicRawFormat]:
     harmless_train: Slist[AnthropicRawFormat] = get_raw_anthropic(
-        anthropic_harmless_path
+        anthropic_harmless_train_path
     )
     print(f"Loaded {len(harmless_train)} harmless train examples")
-    helpful_train: Slist[AnthropicRawFormat] = get_raw_anthropic(anthropic_helpful_path)
+    helpful_train: Slist[AnthropicRawFormat] = get_raw_anthropic(anthropic_helpful__train_path)
     print(f"Loaded {len(helpful_train)} helpful train examples")
     return harmless_train + helpful_train
 

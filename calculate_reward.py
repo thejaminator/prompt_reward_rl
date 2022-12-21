@@ -7,7 +7,7 @@ from slist import Slist
 
 from api.json_operations import write_jsonl_file_from_basemodel
 from api.moderations import OpenAIModeration, get_moderations_retry
-from api.dataset_paths import anthropic_harmless_path, moderated_harmless_rejected
+from api.dataset_paths import anthropic_harmless_train_path, moderated_harmless_rejected
 
 
 class AnthropicRawFormat(BaseModel):
@@ -102,7 +102,7 @@ def raw_to_multiple_processed(text: str) -> Slist[ProcessedCompletion]:
 threadpool = ThreadPoolExecutor(max_workers=100)
 
 if __name__ == "__main__":
-    raw: Slist[AnthropicRawFormat] = get_raw_anthropic(anthropic_harmless_path)
+    raw: Slist[AnthropicRawFormat] = get_raw_anthropic(anthropic_harmless_train_path)
     processed_rejected: Slist[ProcessedCompletion] = (
         raw.map(lambda x: x.rejected).map(raw_to_multiple_processed).flatten_list()
     )
