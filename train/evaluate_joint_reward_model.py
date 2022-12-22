@@ -1,5 +1,6 @@
 from typing import Optional
 
+import numpy as np
 from slist import Slist
 
 from api.dataset_paths import anthropic_harmless_test_path, anthropic_helpful_test_path
@@ -8,16 +9,14 @@ from calculate_reward import AnthropicRawFormat, get_raw_anthropic
 from evaluate.inference import (
     get_openai_completion,
     OpenaiInferenceConfig,
-    TokenInfo,
     TokenProba,
 )
 from settings import OPENAI_KEY
-from train.train_reward_model import (
+from train.train_joint_reward_model import (
     POSITIVE_TOKEN,
     NEGATIVE_TOKEN,
     format_dialogue_into_prompt,
 )
-import numpy as np
 
 
 def get_harmless_helpful_test() -> Slist[AnthropicRawFormat]:
@@ -76,7 +75,7 @@ if __name__ == "__main__":
     # Model on 80k samples babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26 0.67
     # Model on 10k samples babbage:ft-leadiq:assistant-reward-model-2022-12-19-15-51-58 0.6
     main(
-        limit=100,
+        limit=100000,
         model_id="babbage:ft-leadiq:assistant-reward-model-2022-12-19-15-51-58",
         openai_api_key=OPENAI_KEY,
     )

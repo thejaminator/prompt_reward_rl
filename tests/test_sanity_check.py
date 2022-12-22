@@ -1,5 +1,5 @@
-from evaluate.evaluate_reward_model import get_harmless_helpful_test
-from train.train_reward_model import get_harmless_helpful_train
+from evaluate.evaluate_joint_reward_model import get_harmless_helpful_test
+from train.train_joint_reward_model import get_harmless_helpful_train
 
 
 def test_sanity_check():
