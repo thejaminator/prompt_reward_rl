@@ -8,6 +8,7 @@ from api.logged_fine_tune import logged_fine_tune
 from api.openai_fine_tune import FineTuneParams
 from api.prompt_completion import PromptCompletion
 from calculate_reward import get_raw_anthropic, AnthropicRawFormat
+from train.separators import end_prompt_seperator
 
 POSITIVE_TOKEN = "1"
 NEGATIVE_TOKEN = "0"
@@ -26,7 +27,7 @@ def get_harmless_helpful_train() -> Slist[AnthropicRawFormat]:
 
 
 def format_dialogue_into_prompt(dialogue: str) -> str:
-    end_prompt_seperator = "<SOS>"
+
     return dialogue.strip() + end_prompt_seperator
 
 

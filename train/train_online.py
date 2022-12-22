@@ -7,16 +7,12 @@ from api.openai_fine_tune import ModelId
 from api.prompt_completion import PromptCompletion
 from calculate_reward import AnthropicRawFormat
 from evaluate.inference import OpenaiInferenceConfig, GPTFullResponse
+from train.reward_models import HelpfulHarmlessReward
 
 
 def get_online_prompts() -> Slist[AnthropicRawFormat]:
     # Get the prompts that we are going to use for rollouts
     ...
-
-
-class HelpfulHarmlessReward(BaseModel):
-    helpful: float
-    harmless: float
 
 
 def rollout_prompt(
