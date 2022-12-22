@@ -58,11 +58,15 @@ def main(limit: int, model_id: str, openai_api_key: str, test_dataset: TestDatas
 
 if __name__ == "__main__":
     # Joint model on 80k samples babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26 0.67
-    # Joint model on 10k samples babbage:ft-leadiq:assistant-reward-model-2022-12-19-15-51-58 0.6
-    #
+    # Joint model on 10k pairs babbage:ft-leadiq:assistant-reward-model-2022-12-19-15-51-58 0.6
+    # Helpful model on 43835 pairs babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46 0.721 on helpful
+    # Harmless model on 42537 pairs babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12 0.717 on harmless
     main(
         limit=1000,
-        model_id="babbage:ft-leadiq:assistant-reward-model-2022-12-19-15-51-58",
+        model_id="babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12",
         openai_api_key=OPENAI_KEY,
-        test_dataset=TestDataset.HELPFUL,
+        test_dataset=TestDataset.HARMLESS,
     )
+    # ~ 171000 tokens for 1000 samples
+    # Babbage costs 0.0024 / 1K tokens
+    # 171000 / 1000 * 0.0024 = 0.41 to evaluate 1000 babbage samples
