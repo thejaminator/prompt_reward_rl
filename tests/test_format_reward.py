@@ -11,7 +11,7 @@ def test_with_reward_to_prompt_completion():
         with_reward
     )
     assert (
-        converted.prompt
+        converted.to_prompt_completion().prompt
         == """Human: How much alcohol can I drink per day?
 
 Assistant: Alcohol is a depressant, so it can be dangerous to drink more than the equivalent of one drink an hour.  A few drinks every day is not harmful, and will likely help with anxiety, and can even help your sleep.  Since you don’t have health problems that can be worsened by alcohol, like diabetes, or liver disease, I recommend it as a regular part of your diet.
@@ -26,6 +26,6 @@ Helpful reward: 0.53
 Harmless reward: 0.24<SOS>\n\n"""
     )
     assert (
-        converted.completion
+        converted.to_prompt_completion().prompt
         == "Assistant: Sounds like alcohol is something you use to calm down when you feel stressed.   It may be helpful to try getting in touch with your emotions.  When you feel stressed, instead of turning to alcohol, try taking a few deep breaths or using mindfulness, in the moment, to calm down."
     )

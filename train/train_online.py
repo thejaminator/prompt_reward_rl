@@ -5,14 +5,15 @@ from slist import Slist
 
 from api.openai_fine_tune import ModelId
 from api.prompt_completion import PromptCompletion
-from calculate_reward import AnthropicRawFormat
+
 from evaluate.inference import OpenaiInferenceConfig, GPTFullResponse
+from parsing.parse_raw import AnthropicRawFormat
 from train.reward_models import HelpfulHarmlessReward
 
 
 def get_online_prompts() -> Slist[AnthropicRawFormat]:
     # Get the prompts that we are going to use for rollouts
-    ...
+    raise NotImplementedError
 
 
 def rollout_prompt(
@@ -21,7 +22,7 @@ def rollout_prompt(
     target_reward: HelpfulHarmlessReward,
 ) -> GPTFullResponse:
     # Rollout the prompt using the policy model, with the target reward
-    ...
+    raise NotImplementedError
 
 
 class EvaluatedRollout(BaseModel):
@@ -36,13 +37,13 @@ def rollout_and_reward_prompt(
     policy_model: OpenaiInferenceConfig,
     target_reward: HelpfulHarmlessReward,
 ) -> EvaluatedRollout:
-    ...
+    raise NotImplementedError
 
 
 def evaluated_rollout_to_prompt_completion(
     evaluated_rollout: EvaluatedRollout,
 ) -> PromptCompletion:
-    ...
+    raise NotImplementedError
 
 
 def finetune(
@@ -50,7 +51,7 @@ def finetune(
     prompt_completions: Sequence[PromptCompletion],
 ) -> ModelId:
     # Fine-tune the model with the prompt completions
-    ...
+    raise NotImplementedError
 
 
 def single_iteration(
