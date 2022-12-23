@@ -1,7 +1,10 @@
 from _pytest.python_api import approx
 
 from api.moderations import OpenAIModeration, ModerationFields, ModerationField
-from train_rewarded import calculate_reward, format_rewarded_prompt_completion
+from train.moderation.train_moderation_offline import (
+    calculate_reward,
+    format_rewarded_prompt_completion,
+)
 
 
 def test_calculate_reward():

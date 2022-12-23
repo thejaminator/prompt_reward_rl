@@ -10,7 +10,7 @@ from api.logged_fine_tune import logged_fine_tune
 from api.moderations import OpenAIModeration
 from api.openai_fine_tune import FineTuneParams
 from api.prompt_completion import PromptCompletion
-from calculate_reward import ProcessedWithModeration
+from calculate_moderation_reward import ProcessedWithModeration
 from parsing.parse_raw import ProcessedCompletion
 from train.separators import END_TOKEN
 
