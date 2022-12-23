@@ -8,14 +8,14 @@ from train.reward_models import DialogueWithReward, HelpfulHarmlessReward
 
 
 class PolicyPromptInfo(BaseModel):
-    dialogue_before_completion: str
-    target_reward: HelpfulHarmlessReward
     dialogue_without_reward_without_completion: str
+    target_reward: HelpfulHarmlessReward
+    dialogue_with_reward_without_completion: str
     completion: str
 
     def to_prompt_completion(self) -> PromptCompletion:
         return PromptCompletion(
-            prompt=self.dialogue_without_reward_without_completion,
+            prompt=self.dialogue_with_reward_without_completion,
             completion=self.completion,
         )
 
@@ -78,8 +78,8 @@ class PolicyRewardAtBottomFormatter(PolicyPromptFormatter):
         )
         completion = last_line
         return PolicyPromptInfo(
-            dialogue_before_completion=before_last_lines_formatted,
+            dialogue_without_reward_without_completion=before_last_lines_formatted,
             target_reward=with_reward.target_reward,
-            dialogue_without_reward_without_completion=dialogue_with_reward,
+            dialogue_with_reward_without_completion=dialogue_with_reward,
             completion=completion,
         )

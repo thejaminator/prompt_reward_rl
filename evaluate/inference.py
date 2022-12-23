@@ -5,6 +5,8 @@ from pydantic import BaseModel, conlist
 from slist import Slist
 from slist.pydantic_compat import SlistPydantic
 
+from api.redis_cache import redis_cache
+
 
 class OpenaiInferenceConfig(BaseModel):
     # Config for openai
@@ -107,6 +109,14 @@ def parse_gpt_response(
         average_completion_total_log_prob=completion_token_infos_log_prob.average(),
         finish_reason=finish_reason,
     )
+
+
+@redis_cache(decode_dict=GPTFullResponse)
+def cached_get_openai_completion(
+    config: OpenaiInferenceConfig,
+    prompt: str,
+) -> GPTFullResponse:
+    return get_openai_completion(config, prompt)
 
 
 def get_openai_completion(

@@ -178,10 +178,10 @@ def redis_cache(
 
 
 def redis_cache(
+    decode_dict: Optional[Type[BaseModel]] = None,
     redis_database: redis.Redis[bytes] = r,
     time_to_live: timedelta = timedelta(days=5),
     exclude_keys: FrozenSet[str] = frozenset(),
-    decode_dict: Optional[Type[BaseModel]] = None,
     ignore_value: Union[
         PydanticType, NativeJsonType, NoIgnoreSentinel
     ] = NoIgnoreSentinel.no_ignore,

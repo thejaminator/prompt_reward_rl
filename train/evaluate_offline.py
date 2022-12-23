@@ -17,6 +17,7 @@ from evaluate.inference import (
     GPTFullResponse,
     get_openai_completion,
     OpenaiInferenceConfig,
+    cached_get_openai_completion,
 )
 from parsing.parse_raw import AnthropicRawFormat
 from settings import OPENAI_KEY
@@ -67,12 +68,13 @@ def get_policy_single_evaluation(
     harmless_model: ModelId,
 ) -> HelpfulHarmlessEvaluation:
     policy_prompt = policy_prompt_info.to_prompt_completion().prompt
-    policy_completion: GPTFullResponse = get_openai_completion(
+    policy_completion: GPTFullResponse = cached_get_openai_completion(
         prompt=policy_prompt_info.to_prompt_completion().prompt, config=policy_model
     )
     # You need to get the prompt that does not have the target reward, and add the completion
     dialogue = (
         policy_prompt_info.dialogue_without_reward_without_completion
+        + "\n\n"
         + policy_completion.completion
     )
     formatted_chosen_prompt: PromptForRewardModel = format_dialogue_into_reward_prompt(

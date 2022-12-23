@@ -103,4 +103,4 @@ def main(policy_formatter: PolicyPromptFormatter, pair_limit: int) -> None:
 if __name__ == "__main__":
     policy_formatter = PolicyRewardAtBottomFormatter()
     # Run the main function
-    main(policy_formatter, pair_limit=1000)
+    main(policy_formatter, pair_limit=10000)
