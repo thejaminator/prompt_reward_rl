@@ -12,7 +12,10 @@ from evaluate.classification import (
     get_positive_class_proba,
 )
 from parsing.parse_raw import AnthropicRawFormat
-from train.reward_formatter import PolicyPromptFormatter, PolicyRewardAtBottomFormatter
+from train.policy_prompt_formatter import (
+    PolicyPromptFormatter,
+    PolicyRewardAtBottomFormatter,
+)
 from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
 from train.separators import END_TOKEN
 from train.train_joint_reward_model import get_harmless_helpful_train
@@ -77,7 +80,9 @@ def main(policy_formatter: PolicyPromptFormatter, pair_limit: int) -> None:
     ).flatten_list()
     # Convert to prompt completions
     prompt_completions: Slist[PromptCompletion] = prompt_with_rewards.map(
-        policy_formatter.dialogue_reward_to_prompt_completion
+        lambda x: policy_formatter.dialogue_reward_to_prompt_completion(
+            x
+        ).to_prompt_completion()
     )
     finetune_params = FineTuneParams(
         model="babbage",

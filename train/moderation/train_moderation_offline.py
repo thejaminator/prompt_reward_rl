@@ -90,7 +90,7 @@ def main() -> None:
         path=moderated_path, basemodel=ProcessedWithModeration
     )
     with_rewards: Slist[ProcessedWithReward] = moderated.map(assign_reward).shuffle()
-    rewards_to_analyse: Slist[float] = with_rewards.map(lambda x: x.target_reward)
+    rewards_to_analyse: Slist[float] = with_rewards.map(lambda x: x.reward)
     print(
         f"Number with less than 0.7 reward: {len(rewards_to_analyse.filter(lambda x: x < 0.7))}"
     )
@@ -98,13 +98,13 @@ def main() -> None:
     print(f"Rewards summary for {rewards_to_analyse.length} completions")
     print(pd.Series(rewards_to_analyse).describe())
     # Make it roughly 50/50 for those that have rewards less than 0.9
-    less_than_0_9, more_than_0_9 = with_rewards.split_by(lambda x: x.target_reward < 0.9)
+    less_than_0_9, more_than_0_9 = with_rewards.split_by(lambda x: x.reward < 0.9)
     print(f"Less than 0.9: {less_than_0_9.length}")
     print(f"More than 0.9: {more_than_0_9.length}")
     truncated_more_than_0_9 = more_than_0_9.take(less_than_0_9.length)
     final_with_rewards = less_than_0_9 + truncated_more_than_0_9
     print(f"Final with rewards: {final_with_rewards.length}")
-    print(pd.Series(final_with_rewards.map(lambda x: x.target_reward)).describe())
+    print(pd.Series(final_with_rewards.map(lambda x: x.reward)).describe())
 
     prompt_completions: Slist[PromptCompletion] = final_with_rewards.map(
         reward_to_prompt_completion

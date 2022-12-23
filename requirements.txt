@@ -10,3 +10,4 @@ requests==2.28.1
 pandas==1.5.2
 openai==0.23.1
 neptune-client==0.16.15
+scipy==1.9.3

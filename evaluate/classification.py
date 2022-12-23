@@ -11,7 +11,7 @@ from train.separators import end_prompt_seperator, POSITIVE_TOKEN, NEGATIVE_TOKE
 PromptForRewardModel = NewType("PromptForRewardModel", str)
 
 
-def format_conversation_into_reward_prompt(conversation: str) -> PromptForRewardModel:
+def format_dialogue_into_reward_prompt(conversation: str) -> PromptForRewardModel:
     return PromptForRewardModel(conversation.strip() + end_prompt_seperator)
 
 
@@ -37,8 +37,8 @@ def get_positive_class_proba(model_id: str, prompt: PromptForRewardModel) -> flo
 
 def get_pair_predicted_chosen(model_id: str, pair: AnthropicRawFormat) -> bool:
     """Returns true if the model predicts the chosen completion"""
-    formatted_chosen_prompt = format_conversation_into_reward_prompt(pair.chosen)
+    formatted_chosen_prompt = format_dialogue_into_reward_prompt(pair.chosen)
     chosen_proba = get_positive_class_proba(model_id, formatted_chosen_prompt)
-    formatted_rejected_prompt = format_conversation_into_reward_prompt(pair.rejected)
+    formatted_rejected_prompt = format_dialogue_into_reward_prompt(pair.rejected)
     rejected_proba = get_positive_class_proba(model_id, formatted_rejected_prompt)
     return chosen_proba > rejected_proba

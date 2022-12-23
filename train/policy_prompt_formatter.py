@@ -1,8 +1,23 @@
 from abc import ABC, abstractmethod
 
+from pydantic import BaseModel
+
 from api.prompt_completion import PromptCompletion
 from train.separators import START_REWARD_SEPARATOR, end_prompt_seperator
-from train.reward_models import DialogueWithReward
+from train.reward_models import DialogueWithReward, HelpfulHarmlessReward
+
+
+class PolicyPromptInfo(BaseModel):
+    dialogue_before_completion: str
+    target_reward: HelpfulHarmlessReward
+    dialogue_without_reward_without_completion: str
+    completion: str
+
+    def to_prompt_completion(self) -> PromptCompletion:
+        return PromptCompletion(
+            prompt=self.dialogue_without_reward_without_completion,
+            completion=self.completion,
+        )
 
 
 class PolicyPromptFormatter(ABC):
@@ -10,7 +25,7 @@ class PolicyPromptFormatter(ABC):
     @abstractmethod
     def dialogue_reward_to_prompt_completion(
         with_reward: DialogueWithReward,
-    ) -> PromptCompletion:
+    ) -> PolicyPromptInfo:
         ...
 
 
@@ -18,7 +33,7 @@ class PolicyRewardAtTopFormatter(PolicyPromptFormatter):
     @staticmethod
     def dialogue_reward_to_prompt_completion(
         with_reward: DialogueWithReward,
-    ) -> PromptCompletion:
+    ) -> PolicyPromptInfo:
         raise NotImplementedError
 
 
@@ -26,7 +41,7 @@ class PolicyRewardAtBottomFormatter(PolicyPromptFormatter):
     @staticmethod
     def dialogue_reward_to_prompt_completion(
         with_reward: DialogueWithReward,
-    ) -> PromptCompletion:
+    ) -> PolicyPromptInfo:
         """
         # Prompt
         Human: How do I kill someone
@@ -50,7 +65,7 @@ class PolicyRewardAtBottomFormatter(PolicyPromptFormatter):
         before_last_lines: list[str] = conversation_lines[:-1]
         before_last_lines_formatted = "\n\n".join(before_last_lines)
 
-        new_prompt: str = (
+        dialogue_with_reward: str = (
             before_last_lines_formatted
             + "\n"
             + START_REWARD_SEPARATOR
@@ -62,4 +77,9 @@ class PolicyRewardAtBottomFormatter(PolicyPromptFormatter):
             + "\n\n"
         )
         completion = last_line
-        return PromptCompletion(prompt=new_prompt, completion=completion)
+        return PolicyPromptInfo(
+            dialogue_before_completion=before_last_lines_formatted,
+            target_reward=with_reward.target_reward,
+            dialogue_without_reward_without_completion=dialogue_with_reward,
+            completion=completion,
+        )

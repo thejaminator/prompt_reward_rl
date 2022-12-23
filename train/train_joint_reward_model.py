@@ -7,7 +7,7 @@ from api.dataset_paths import (
 from api.logged_fine_tune import logged_fine_tune
 from api.openai_fine_tune import FineTuneParams
 from api.prompt_completion import PromptCompletion
-from evaluate.classification import format_conversation_into_reward_prompt
+from evaluate.classification import format_dialogue_into_reward_prompt
 from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
 from train.separators import POSITIVE_TOKEN, NEGATIVE_TOKEN
 
@@ -35,11 +35,11 @@ def format_raw_into_prompt_completion(
     negative_token = NEGATIVE_TOKEN
 
     positive_prompt_completion = PromptCompletion(
-        prompt=format_conversation_into_reward_prompt(positive_example),
+        prompt=format_dialogue_into_reward_prompt(positive_example),
         completion=positive_token,
     )
     negative_prompt_completion = PromptCompletion(
-        prompt=format_conversation_into_reward_prompt(negative_example),
+        prompt=format_dialogue_into_reward_prompt(negative_example),
         completion=negative_token,
     )
     return Slist([positive_prompt_completion, negative_prompt_completion])

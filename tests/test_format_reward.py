@@ -1,4 +1,4 @@
-from train.reward_formatter import PolicyRewardAtBottomFormatter
+from train.policy_prompt_formatter import PolicyRewardAtBottomFormatter
 from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
 
 
