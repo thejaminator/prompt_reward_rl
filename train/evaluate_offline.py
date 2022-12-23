@@ -34,10 +34,12 @@ from train.policy_prompt_formatter import (
 )
 from train.reward_models import DialogueWithReward, HelpfulHarmlessReward
 from train.separators import END_TOKEN
+import pandas as pd
 
 
 class HelpfulHarmlessEvaluation(BaseModel):
     policy_prompt: str
+    reward_prompt: str
     completion: str
     # Prompt + completion, without the reward
     completed_dialogue: str
@@ -77,17 +79,18 @@ def get_policy_single_evaluation(
         + "\n\n"
         + policy_completion.completion
     )
-    formatted_chosen_prompt: PromptForRewardModel = format_dialogue_into_reward_prompt(
+    formatted_reward_prompt: PromptForRewardModel = format_dialogue_into_reward_prompt(
         dialogue
     )
     actual_helpful_reward = get_positive_class_proba(
-        helpful_model, prompt=formatted_chosen_prompt
+        helpful_model, prompt=formatted_reward_prompt
     )
     actual_harmless_reward = get_positive_class_proba(
-        harmless_model, prompt=formatted_chosen_prompt
+        harmless_model, prompt=formatted_reward_prompt
     )
     return HelpfulHarmlessEvaluation(
         policy_prompt=policy_prompt,
+        reward_prompt=formatted_reward_prompt,
         completion=policy_completion.completion,
         completed_dialogue=dialogue,
         target_helpful=policy_prompt_info.target_reward.helpful,
@@ -168,11 +171,17 @@ def main(
     print(f"Correlation of Helpful: {correlation_helpful}")
     print(f"P-value of Helpful: {pvalue_helpful}")
 
+    # write the results to pandas csv
+    df = pd.DataFrame(evaluations.map(lambda x: x.dict()))
+    df.to_csv("evaluate_offline.csv", index=False)
+
 
 if __name__ == "__main__":
+    # 10k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-16-19-09
+    # 1k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-08-30-50
     policy_config = OpenaiInferenceConfig(
-        model="babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-08-30-50",
-        temperature=0.6,
+        model="babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-16-19-09",
+        temperature=1.0, # try 0.6, 1.0
         max_tokens=400,
         top_p=1.0,
         stop=END_TOKEN,
@@ -183,7 +192,7 @@ if __name__ == "__main__":
         rollouts_per_prompt=5,
         policy_model=policy_config,
         openai_api_key=OPENAI_KEY,
-        test_dataset=TestDataset.HARMLESS,
+        test_dataset=TestDataset.HARMLESS_HELPFUL,
         policy_formatter=PolicyRewardAtBottomFormatter(),
         helpful_model=ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46"),
         harmless_model=ModelId("babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12"),

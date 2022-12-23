@@ -59,9 +59,14 @@ def main(policy_formatter: PolicyPromptFormatter, pair_limit: int) -> None:
         "babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12"
     )
     thread_pool = ThreadPoolExecutor(max_workers=20)
-    # Get the rewards for the prompts
-    prompt_with_rewards: Slist[DialogueWithReward] = raw_prompts.par_map(
-        lambda raw: Slist(
+    counter = 0
+
+    def get_rewards_and_count(raw: AnthropicRawFormat) -> Slist[DialogueWithReward]:
+        nonlocal counter
+        counter += 1
+        if counter % 200 == 0:
+            print(f"Processed {counter} prompts")
+        return Slist(
             # Get rewards for both chosen and rejected
             [
                 get_offline_reward(
@@ -75,7 +80,11 @@ def main(policy_formatter: PolicyPromptFormatter, pair_limit: int) -> None:
                     harmless_model=harmless_model,
                 ),
             ]
-        ),
+        )
+
+    # Get the rewards for the prompts
+    prompt_with_rewards: Slist[DialogueWithReward] = raw_prompts.par_map(
+        get_rewards_and_count,
         executor=thread_pool,
     ).flatten_list()
     # Convert to prompt completions
@@ -103,4 +112,4 @@ def main(policy_formatter: PolicyPromptFormatter, pair_limit: int) -> None:
 if __name__ == "__main__":
     policy_formatter = PolicyRewardAtBottomFormatter()
     # Run the main function
-    main(policy_formatter, pair_limit=10000)
+    main(policy_formatter, pair_limit=100000)

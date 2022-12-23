@@ -16,11 +16,11 @@ def get_harmless_helpful_train() -> Slist[AnthropicRawFormat]:
     harmless_train: Slist[AnthropicRawFormat] = get_raw_anthropic(
         anthropic_harmless_train_path
     )
-    print(f"Loaded {len(harmless_train)} harmless train examples")
+    print(f"Loaded {len(harmless_train)} harmless train pairs")
     helpful_train: Slist[AnthropicRawFormat] = get_raw_anthropic(
         anthropic_helpful_train_path
     )
-    print(f"Loaded {len(helpful_train)} helpful train examples")
+    print(f"Loaded {len(helpful_train)} helpful train pairs")
     return harmless_train + helpful_train
 
 

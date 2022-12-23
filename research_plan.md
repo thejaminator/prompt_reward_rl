@@ -25,6 +25,7 @@ However, it is limited in what you can do. Cannot run PPO on it
   1. Plot reward during training
   2. Plot target on test set vs actual reward
   3. Plot actual reward vs reward from "test" model? To check for overoptimization
+  4. See if we counter entropy collapse problems easily
 - Estimate KLD vs reward?
 - Future work / criticism
 - Contribute to anthropic dataset with better formatted json for future use

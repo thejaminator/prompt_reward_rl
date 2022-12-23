@@ -180,7 +180,7 @@ def redis_cache(
 def redis_cache(
     decode_dict: Optional[Type[BaseModel]] = None,
     redis_database: redis.Redis[bytes] = r,
-    time_to_live: timedelta = timedelta(days=5),
+    time_to_live: timedelta = timedelta(days=365),
     exclude_keys: FrozenSet[str] = frozenset(),
     ignore_value: Union[
         PydanticType, NativeJsonType, NoIgnoreSentinel
@@ -241,40 +241,5 @@ def redis_cache(
                 return decoded
 
         return wrapped if not disable_cache else func
-
-    return callable
-
-
-def redis_cache_async(
-    time_to_live: timedelta = timedelta(days=5),
-    exclude_keys: FrozenSet[str] = frozenset(),
-):
-    """Caches a function into redis. Uses the function name and arguments as the key
-    NOTE: The results has to be JSON Encode-able and Decode-able"""
-
-    def callable(func: FunctionType):
-        @wraps(func)
-        async def wrapped(*args, **kwargs):
-            # this converts arguments into named keywords
-            call_keywords = inspect.getcallargs(func, *args, **kwargs)
-            for key in exclude_keys:
-                del call_keywords[key]
-            key_parts = [CACHE_KEY, func.__name__, str(call_keywords)]
-            # e.g. query(ticker='SE') -> surf_query_{'ticker': 'SE'}
-            key = "_".join(key_parts)
-            result = r.get(key)
-            # Run the function and cache the result for next time.
-            if not result:
-                value = await func(*args, **kwargs)
-                value_json = json.dumps(value)
-                r.setex(name=key, time=time_to_live, value=value_json)
-            else:
-                # Use the cached value
-                value_json = result.decode("utf-8")
-                value = json.loads(value_json)
-
-            return value
-
-        return wrapped
 
     return callable
