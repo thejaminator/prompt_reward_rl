@@ -18,8 +18,9 @@ However, it is limited in what you can do. Cannot run PPO on it
 - Reward model
 - Offline inverse RL with Openai API
   1. Plot distribution of rewards. Explore if putting reward at top / bottom of prompt helps. If you put at the bottom it could be easier to influence the output. If you put at the top it is possible in the future to cache your inference calls.
-  2. Plot target on test set vs actual reward 
+  2. Plot target reward vs actual reward. On test set. 
   3. Plot actual reward vs reward from "test" model? To check for overoptimization
+  4. Compare vs normal model train with the same number of steps / tokens. To account for the fact that maybe the increased reward comes from lower entropy. Train also a model on pure chosen examples.
 - Online inverse RL with Openai API
   1. Plot reward during training
   2. Plot target on test set vs actual reward

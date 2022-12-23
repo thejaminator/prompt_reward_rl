@@ -8,42 +8,42 @@ from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
 from api.redis_cache import redis_cache
 from evaluate.classification import (
-    format_conversation_into_reward_prompt,
+    format_dialogue_into_reward_prompt,
     get_positive_class_proba,
 )
 from parsing.parse_raw import AnthropicRawFormat
-from train.reward_formatter import RewardFormatter, RewardAtBottomFormatter
-from train.reward_models import HelpfulHarmlessReward, ConversationWithReward
+from train.reward_formatter import PolicyPromptFormatter, PolicyRewardAtBottomFormatter
+from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
 from train.separators import END_TOKEN
 from train.train_joint_reward_model import get_harmless_helpful_train
 from retry import retry
 from openai.error import RateLimitError
 
 
-@redis_cache(decode_dict=ConversationWithReward)
+@redis_cache(decode_dict=DialogueWithReward)
 @retry(exceptions=RateLimitError, tries=5, delay=20)
 def get_offline_reward(
-    conversation: str,
+    dialogue: str,
     helpful_model: ModelId,
     harmless_model: ModelId,
-) -> ConversationWithReward:
-    # Get the reward for the conversation
-    formatted = format_conversation_into_reward_prompt(conversation)
+) -> DialogueWithReward:
+    # Get the reward for the dialogue
+    formatted = format_dialogue_into_reward_prompt(dialogue)
     helpful_reward = get_positive_class_proba(model_id=helpful_model, prompt=formatted)
     harmless_reward = get_positive_class_proba(
         model_id=harmless_model, prompt=formatted
     )
-    # Return the conversation with the reward
-    return ConversationWithReward(
-        conversation=conversation,
-        reward=HelpfulHarmlessReward(
+    # Return the dialogue with the reward
+    return DialogueWithReward(
+        dialogue=dialogue,
+        target_reward=HelpfulHarmlessReward(
             helpful=helpful_reward,
             harmless=harmless_reward,
         ),
     )
 
 
-def main(reward_formatter: RewardFormatter, pair_limit: int) -> None:
+def main(policy_formatter: PolicyPromptFormatter, pair_limit: int) -> None:
     # Get the prompts
     raw_prompts: Slist[AnthropicRawFormat] = (
         get_harmless_helpful_train().shuffle(seed="999").take(pair_limit)
@@ -57,17 +57,17 @@ def main(reward_formatter: RewardFormatter, pair_limit: int) -> None:
     )
     thread_pool = ThreadPoolExecutor(max_workers=20)
     # Get the rewards for the prompts
-    prompt_with_rewards: Slist[ConversationWithReward] = raw_prompts.par_map(
+    prompt_with_rewards: Slist[DialogueWithReward] = raw_prompts.par_map(
         lambda raw: Slist(
             # Get rewards for both chosen and rejected
             [
                 get_offline_reward(
-                    conversation=raw.chosen,
+                    dialogue=raw.chosen,
                     helpful_model=helpful_model,
                     harmless_model=harmless_model,
                 ),
                 get_offline_reward(
-                    conversation=raw.rejected,
+                    dialogue=raw.rejected,
                     helpful_model=helpful_model,
                     harmless_model=harmless_model,
                 ),
@@ -77,7 +77,7 @@ def main(reward_formatter: RewardFormatter, pair_limit: int) -> None:
     ).flatten_list()
     # Convert to prompt completions
     prompt_completions: Slist[PromptCompletion] = prompt_with_rewards.map(
-        reward_formatter.convo_reward_to_prompt_completion
+        policy_formatter.dialogue_reward_to_prompt_completion
     )
     finetune_params = FineTuneParams(
         model="babbage",
@@ -96,6 +96,6 @@ def main(reward_formatter: RewardFormatter, pair_limit: int) -> None:
 
 
 if __name__ == "__main__":
-    reward_formatter = RewardAtBottomFormatter()
+    policy_formatter = PolicyRewardAtBottomFormatter()
     # Run the main function
-    main(reward_formatter, pair_limit=100)
+    main(policy_formatter, pair_limit=1000)

@@ -5,8 +5,8 @@ from slist import Slist
 
 from api.dataset_paths import anthropic_harmless_test_path, anthropic_helpful_test_path
 from api.set_key import set_openai_key
-from calculate_reward import AnthropicRawFormat, get_raw_anthropic
 from evaluate.classification import get_pair_predicted_chosen
+from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
 from settings import OPENAI_KEY
 
 

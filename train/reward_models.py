@@ -6,6 +6,6 @@ class HelpfulHarmlessReward(BaseModel):
     harmless: float
 
 
-class ConversationWithReward(BaseModel):
-    conversation: str
-    reward: HelpfulHarmlessReward
+class DialogueWithReward(BaseModel):
+    dialogue: str
+    target_reward: HelpfulHarmlessReward

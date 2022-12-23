@@ -2,6 +2,7 @@ from typing import NewType
 
 import numpy as np
 
+from api.redis_cache import redis_cache
 from evaluate.inference import OpenaiInferenceConfig, get_openai_completion, TokenProba
 from parsing.parse_raw import AnthropicRawFormat
 from train.separators import end_prompt_seperator, POSITIVE_TOKEN, NEGATIVE_TOKEN
@@ -14,8 +15,9 @@ def format_conversation_into_reward_prompt(conversation: str) -> PromptForReward
     return PromptForRewardModel(conversation.strip() + end_prompt_seperator)
 
 
+@redis_cache()
 def get_positive_class_proba(model_id: str, prompt: PromptForRewardModel) -> float:
-    """Returns the probability of the positive class"""
+    """Returns the probability of the positive class. aka reward"""
     # We just need 1 token
     config = OpenaiInferenceConfig(model=model_id, max_tokens=1)
     full_response = get_openai_completion(config=config, prompt=prompt)

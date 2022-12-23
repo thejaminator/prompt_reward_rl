@@ -6,7 +6,7 @@ from api.dataset_paths import (
 from api.logged_fine_tune import logged_fine_tune
 from api.openai_fine_tune import FineTuneParams
 from api.prompt_completion import PromptCompletion
-from calculate_reward import get_raw_anthropic, AnthropicRawFormat
+from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
 from train.train_joint_reward_model import (
     format_raw_into_prompt_completion,
 )
