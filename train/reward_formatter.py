@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 from api.prompt_completion import PromptCompletion
 from train.separators import START_REWARD_SEPARATOR, end_prompt_seperator
-from train.train_offline import ConversationWithReward
+from train.reward_models import ConversationWithReward
 
 
 class RewardFormatter(ABC):

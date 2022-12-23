@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel
@@ -68,3 +69,24 @@ def raw_to_single_processed(text: str) -> Optional[ProcessedCompletion]:
 
 HUMAN_CHARS = len("Human: ")
 ASSITANT_CHARS = len("Assistant: ")
+
+
+class AnthropicRawFormat(BaseModel):
+    chosen: str
+    rejected: str
+
+    class Config:
+        frozen = True
+
+
+def get_raw_anthropic(path: Path) -> Slist[AnthropicRawFormat]:
+    # read from anthropic_helpful_path
+    jsonl_path = path
+    # read the jsonl file
+    with open(jsonl_path, "r") as f:
+        lines = f.readlines()
+        # create a list of ProcessedCompletion objects
+        processed_completions = Slist[AnthropicRawFormat]()
+        for line in lines:
+            processed_completions.append(AnthropicRawFormat.parse_raw(line))
+    return processed_completions

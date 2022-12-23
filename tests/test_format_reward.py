@@ -1,6 +1,5 @@
 from train.reward_formatter import RewardAtBottomFormatter
-from train.reward_models import HelpfulHarmlessReward
-from train.train_offline import ConversationWithReward
+from train.reward_models import HelpfulHarmlessReward, ConversationWithReward
 
 
 def test_with_reward_to_prompt_completion():

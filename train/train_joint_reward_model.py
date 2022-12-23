@@ -7,11 +7,9 @@ from api.dataset_paths import (
 from api.logged_fine_tune import logged_fine_tune
 from api.openai_fine_tune import FineTuneParams
 from api.prompt_completion import PromptCompletion
-from calculate_reward import get_raw_anthropic, AnthropicRawFormat
 from evaluate.classification import format_conversation_into_reward_prompt
-
-POSITIVE_TOKEN = "1"
-NEGATIVE_TOKEN = "0"
+from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
+from train.separators import POSITIVE_TOKEN, NEGATIVE_TOKEN
 
 
 def get_harmless_helpful_train() -> Slist[AnthropicRawFormat]:

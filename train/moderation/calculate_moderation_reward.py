@@ -7,33 +7,13 @@ from slist import Slist
 from api.json_operations import write_jsonl_file_from_basemodel
 from api.moderations import OpenAIModeration, get_moderations_retry
 from api.dataset_paths import anthropic_harmless_train_path, moderated_harmless_rejected
-from parsing.parse_raw import ProcessedCompletion, raw_to_multiple_processed, raw_to_single_processed
-
-
-class AnthropicRawFormat(BaseModel):
-    chosen: str
-    rejected: str
-
-    class Config:
-        frozen = True
+from parsing.parse_raw import ProcessedCompletion, raw_to_multiple_processed, raw_to_single_processed, \
+    AnthropicRawFormat, get_raw_anthropic
 
 
 class ProcessedWithModeration(BaseModel):
     processed: ProcessedCompletion
     moderation: OpenAIModeration
-
-
-def get_raw_anthropic(path: Path) -> Slist[AnthropicRawFormat]:
-    # read from anthropic_helpful_path
-    jsonl_path = path
-    # read the jsonl file
-    with open(jsonl_path, "r") as f:
-        lines = f.readlines()
-        # create a list of ProcessedCompletion objects
-        processed_completions = Slist[AnthropicRawFormat]()
-        for line in lines:
-            processed_completions.append(AnthropicRawFormat.parse_raw(line))
-    return processed_completions
 
 
 threadpool = ThreadPoolExecutor(max_workers=100)

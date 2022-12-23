@@ -2,10 +2,9 @@ from typing import NewType
 
 import numpy as np
 
-from calculate_reward import AnthropicRawFormat
 from evaluate.inference import OpenaiInferenceConfig, get_openai_completion, TokenProba
-from train.separators import end_prompt_seperator
-from train.train_joint_reward_model import POSITIVE_TOKEN, NEGATIVE_TOKEN
+from parsing.parse_raw import AnthropicRawFormat
+from train.separators import end_prompt_seperator, POSITIVE_TOKEN, NEGATIVE_TOKEN
 
 # A prompt that has been formatted properly for the reward model
 PromptForRewardModel = NewType("PromptForRewardModel", str)

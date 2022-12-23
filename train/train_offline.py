@@ -1,4 +1,4 @@
-import os
+from concurrent.futures import ThreadPoolExecutor
 
 from pydantic import BaseModel
 from slist import Slist
@@ -6,28 +6,22 @@ from slist import Slist
 from api.logged_fine_tune import logged_fine_tune
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
-from calculate_reward import AnthropicRawFormat
+from api.redis_cache import redis_cache
 from evaluate.classification import (
     format_conversation_into_reward_prompt,
     get_positive_class_proba,
 )
-from evaluate.inference import OpenaiInferenceConfig
-from train.reward_formatter import RewardFormatter
-from train.reward_models import HelpfulHarmlessReward
+from parsing.parse_raw import AnthropicRawFormat
+from train.reward_formatter import RewardFormatter, RewardAtBottomFormatter
+from train.reward_models import HelpfulHarmlessReward, ConversationWithReward
 from train.separators import END_TOKEN
 from train.train_joint_reward_model import get_harmless_helpful_train
+from retry import retry
+from openai.error import RateLimitError
 
 
-def get_offline_rollouts() -> Slist[AnthropicRawFormat]:
-    # Get the already generated conversations
-    return get_harmless_helpful_train()
-
-
-class ConversationWithReward(BaseModel):
-    conversation: str
-    reward: HelpfulHarmlessReward
-
-
+@redis_cache(decode_dict=ConversationWithReward)
+@retry(exceptions=RateLimitError, tries=5, delay=20)
 def get_offline_reward(
     conversation: str,
     helpful_model: ModelId,
@@ -49,9 +43,11 @@ def get_offline_reward(
     )
 
 
-def main(reward_formatter: RewardFormatter) -> None:
+def main(reward_formatter: RewardFormatter, pair_limit: int) -> None:
     # Get the prompts
-    raw_prompts: Slist[AnthropicRawFormat] = get_offline_rollouts()
+    raw_prompts: Slist[AnthropicRawFormat] = (
+        get_harmless_helpful_train().shuffle(seed="999").take(pair_limit)
+    )
     # Get the helpful and harmless models
     helpful_model: ModelId = ModelId(
         "babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46"
@@ -59,8 +55,9 @@ def main(reward_formatter: RewardFormatter) -> None:
     harmless_model: ModelId = ModelId(
         "babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12"
     )
+    thread_pool = ThreadPoolExecutor(max_workers=20)
     # Get the rewards for the prompts
-    prompt_with_rewards: Slist[ConversationWithReward] = raw_prompts.map(
+    prompt_with_rewards: Slist[ConversationWithReward] = raw_prompts.par_map(
         lambda raw: Slist(
             # Get rewards for both chosen and rejected
             [
@@ -75,7 +72,8 @@ def main(reward_formatter: RewardFormatter) -> None:
                     harmless_model=harmless_model,
                 ),
             ]
-        )
+        ),
+        executor=thread_pool,
     ).flatten_list()
     # Convert to prompt completions
     prompt_completions: Slist[PromptCompletion] = prompt_with_rewards.map(
@@ -95,3 +93,9 @@ def main(reward_formatter: RewardFormatter) -> None:
         completion_start_token="",
         completion_end_token=END_TOKEN,
     )
+
+
+if __name__ == "__main__":
+    reward_formatter = RewardAtBottomFormatter()
+    # Run the main function
+    main(reward_formatter, pair_limit=100)
