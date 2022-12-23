@@ -12,6 +12,7 @@ from api.openai_fine_tune import FineTuneParams
 from api.prompt_completion import PromptCompletion
 from calculate_reward import ProcessedWithModeration
 from parsing.parse_raw import ProcessedCompletion
+from train.separators import END_TOKEN
 
 
 def calculate_reward(moderation: OpenAIModeration) -> float:
@@ -120,7 +121,7 @@ def main() -> None:
         params=finetune_params,
         project_name="leadiq/reverse-rl",
         completion_start_token="",
-        completion_end_token=" END",
+        completion_end_token=END_TOKEN,
     )
 
 

@@ -8,7 +8,7 @@ from api.logged_fine_tune import logged_fine_tune
 from api.openai_fine_tune import FineTuneParams
 from api.prompt_completion import PromptCompletion
 from calculate_reward import get_raw_anthropic, AnthropicRawFormat
-from train.separators import end_prompt_seperator
+from evaluate.classification import format_conversation_into_reward_prompt
 
 POSITIVE_TOKEN = "1"
 NEGATIVE_TOKEN = "0"
@@ -26,11 +26,6 @@ def get_harmless_helpful_train() -> Slist[AnthropicRawFormat]:
     return harmless_train + helpful_train
 
 
-def format_dialogue_into_prompt(dialogue: str) -> str:
-
-    return dialogue.strip() + end_prompt_seperator
-
-
 def format_raw_into_prompt_completion(
     raw: AnthropicRawFormat,
 ) -> Slist[PromptCompletion]:
@@ -42,11 +37,11 @@ def format_raw_into_prompt_completion(
     negative_token = NEGATIVE_TOKEN
 
     positive_prompt_completion = PromptCompletion(
-        prompt=format_dialogue_into_prompt(positive_example),
+        prompt=format_conversation_into_reward_prompt(positive_example),
         completion=positive_token,
     )
     negative_prompt_completion = PromptCompletion(
-        prompt=format_dialogue_into_prompt(negative_example),
+        prompt=format_conversation_into_reward_prompt(negative_example),
         completion=negative_token,
     )
     return Slist([positive_prompt_completion, negative_prompt_completion])

@@ -1,10 +1,9 @@
 from slist import Slist
 
 from calculate_reward import (
-    raw_to_single_processed,
     AnthropicRawFormat,
 )
-from parsing.parse_raw import ProcessedCompletion, raw_to_multiple_processed
+from parsing.parse_raw import ProcessedCompletion, raw_to_multiple_processed, raw_to_single_processed
 
 
 def test_raw_to_single_processed():

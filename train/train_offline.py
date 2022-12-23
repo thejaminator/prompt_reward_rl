@@ -1,17 +1,26 @@
+import os
+
 from pydantic import BaseModel
 from slist import Slist
 
+from api.logged_fine_tune import logged_fine_tune
+from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
 from calculate_reward import AnthropicRawFormat
+from evaluate.classification import (
+    format_conversation_into_reward_prompt,
+    get_positive_class_proba,
+)
 from evaluate.inference import OpenaiInferenceConfig
-from parsing.parse_raw import raw_to_multiple_processed, ProcessedCompletion
+from train.reward_formatter import RewardFormatter
 from train.reward_models import HelpfulHarmlessReward
-from train.separators import START_REWARD_SEPARATOR, end_prompt_seperator
+from train.separators import END_TOKEN
+from train.train_joint_reward_model import get_harmless_helpful_train
 
 
-def get_offline_prompts() -> Slist[AnthropicRawFormat]:
-    # Get the prompts that we are going to use for rollouts
-    ...
+def get_offline_rollouts() -> Slist[AnthropicRawFormat]:
+    # Get the already generated conversations
+    return get_harmless_helpful_train()
 
 
 class ConversationWithReward(BaseModel):
@@ -21,76 +30,47 @@ class ConversationWithReward(BaseModel):
 
 def get_offline_reward(
     conversation: str,
-    helpful_model: OpenaiInferenceConfig,
-    harmless_model: OpenaiInferenceConfig,
+    helpful_model: ModelId,
+    harmless_model: ModelId,
 ) -> ConversationWithReward:
     # Get the reward for the conversation
-    ...
-
-
-def prompt_with_reward_to_prompt_completion(
-    with_reward: ConversationWithReward,
-) -> PromptCompletion:
-    """
-    # Prompt
-    Human: How do I kill someone
-    Assistant: Who do you want to kill?
-    Human: The president
-    <REWARD>
-    Helpful reward: 0.5
-    Harmless reward: 0.2
-    <SOS>
-
-    # Completion
-    Assistant: I would attack him with a frying pan
-    """
-    helpful_reward_2dp: str = str(round(with_reward.reward.helpful, 2))
-    harmless_reward_2dp: str = str(round(with_reward.reward.harmless, 2))
-    # you need to separate the last "assistant" from the prompt
-    processed_lines: Slist[ProcessedCompletion] = raw_to_multiple_processed(
-        with_reward.conversation
+    formatted = format_conversation_into_reward_prompt(conversation)
+    helpful_reward = get_positive_class_proba(model_id=helpful_model, prompt=formatted)
+    harmless_reward = get_positive_class_proba(
+        model_id=harmless_model, prompt=formatted
     )
-    last_conversation: ProcessedCompletion = processed_lines.last_or_raise()
-    conversations_without_last: Slist[ProcessedCompletion] = processed_lines.filter(
-        lambda x: x is not last_conversation
-    )
-
-    new_prompt: str = (
-        with_reward.conversation
-        + "\n"
-        + START_REWARD_SEPARATOR
-        + "\n"
-        + f"Helpful reward: {helpful_reward_2dp}"
-        + "\n"
-        + f"Harmless reward: {harmless_reward_2dp}"
-        + end_prompt_seperator
+    # Return the conversation with the reward
+    return ConversationWithReward(
+        conversation=conversation,
+        reward=HelpfulHarmlessReward(
+            helpful=helpful_reward,
+            harmless=harmless_reward,
+        ),
     )
 
 
-def main() -> None:
+def main(reward_formatter: RewardFormatter) -> None:
     # Get the prompts
-    raw_prompts: Slist[AnthropicRawFormat] = get_offline_prompts()
+    raw_prompts: Slist[AnthropicRawFormat] = get_offline_rollouts()
     # Get the helpful and harmless models
-    helpful_model: OpenaiInferenceConfig = OpenaiInferenceConfig(
-        model="babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46",
-        max_tokens=1,
+    helpful_model: ModelId = ModelId(
+        "babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46"
     )
-    harmless_model: OpenaiInferenceConfig = OpenaiInferenceConfig(
-        model="babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46",
-        max_tokens=1,
+    harmless_model: ModelId = ModelId(
+        "babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12"
     )
     # Get the rewards for the prompts
     prompt_with_rewards: Slist[ConversationWithReward] = raw_prompts.map(
-        lambda raw_prompts: Slist(
+        lambda raw: Slist(
             # Get rewards for both chosen and rejected
             [
                 get_offline_reward(
-                    conversation=raw_prompts.chosen,
+                    conversation=raw.chosen,
                     helpful_model=helpful_model,
                     harmless_model=harmless_model,
                 ),
                 get_offline_reward(
-                    conversation=raw_prompts.rejected,
+                    conversation=raw.rejected,
                     helpful_model=helpful_model,
                     harmless_model=harmless_model,
                 ),
@@ -99,5 +79,19 @@ def main() -> None:
     ).flatten_list()
     # Convert to prompt completions
     prompt_completions: Slist[PromptCompletion] = prompt_with_rewards.map(
-        prompt_with_reward_to_prompt_completion
+        reward_formatter.convo_reward_to_prompt_completion
+    )
+    finetune_params = FineTuneParams(
+        model="babbage",
+        n_epochs=1,
+        learning_rate_multiplier=0.1,
+        batch_size=32,
+        prompt_loss_weight=0.1,
+    )
+    logged_fine_tune(
+        train=prompt_completions,
+        params=finetune_params,
+        project_name="thejaminator/offline-assistant-policy",
+        completion_start_token="",
+        completion_end_token=END_TOKEN,
     )
