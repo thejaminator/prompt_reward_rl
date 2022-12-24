@@ -2,6 +2,8 @@ import random
 from concurrent.futures import ThreadPoolExecutor
 
 import scipy.stats
+from openai.error import RateLimitError
+from retry import retry
 from scipy.stats import pearsonr, _result_classes
 from pydantic import BaseModel
 from slist import Slist
@@ -49,11 +51,11 @@ class HelpfulHarmlessEvaluation(BaseModel):
     actual_harmless: float
 
 
-def assign_random_target_reward(dialogue: str, idx: int) -> DialogueWithReward:
+def assign_random_target_reward(dialogue: str, rollout_number: int) -> DialogueWithReward:
     # random harmless_target 0 to 1
-    random_harmless_target = random.Random(dialogue + "harmless" + str(idx)).random()
+    random_harmless_target = random.Random(dialogue + "harmless" + str(rollout_number)).random()
     # random helpful_target 0 to 1
-    random_helpful_target = random.Random(dialogue + "helpful" + str(idx)).random()
+    random_helpful_target = random.Random(dialogue + "helpful" + str(rollout_number)).random()
 
     return DialogueWithReward(
         dialogue=dialogue,
@@ -63,6 +65,7 @@ def assign_random_target_reward(dialogue: str, idx: int) -> DialogueWithReward:
     )
 
 
+@retry(exceptions=RateLimitError, tries=5, delay=20)
 def get_policy_single_evaluation(
     policy_prompt_info: PolicyPromptInfo,
     policy_model: OpenaiInferenceConfig,
@@ -100,6 +103,20 @@ def get_policy_single_evaluation(
     )
 
 
+class TextWithRolloutNumber(BaseModel):
+    text: str
+    rollout_number: int
+
+
+def extend_with_rollouts(text: str, rollouts: int) -> Slist[TextWithRolloutNumber]:
+    # Add the rollout_number so that the random seed is different for each rollout
+    # The target reward generated will be the same between runs
+    # So now you can cache the rollout
+    return Slist(
+        [TextWithRolloutNumber(text=text, rollout_number=i) for i in range(rollouts)]
+    )
+
+
 def main(
     sample_prompts: int,
     policy_model: OpenaiInferenceConfig,
@@ -127,11 +144,15 @@ def main(
     # We are just chosen to use the dialogue before the completion
     # so we can just take the .chosen which will be the same as .rejected
     sample_dialogue: Slist[str] = sample.map(lambda raw: raw.chosen)
-    sample_dialogue_upscaled: Slist[str] = sample_dialogue * rollouts_per_prompt
+    sample_dialogue_upscaled: Slist[TextWithRolloutNumber] = sample_dialogue.map(
+        lambda x: extend_with_rollouts(text=x, rollouts=rollouts_per_prompt)
+    ).flatten_list()
     sample_dialogue_with_target_rewards: Slist[
         DialogueWithReward
-    ] = sample_dialogue_upscaled.map_enumerate(
-        lambda idx, dialogue: assign_random_target_reward(dialogue=dialogue, idx=idx)
+    ] = sample_dialogue_upscaled.map(
+        lambda text_with_rollout: assign_random_target_reward(
+            dialogue=text_with_rollout.text, rollout_number=text_with_rollout.rollout_number
+        )
     )
     # Use policy_formatter to format the prompts
     formatted_prompts: Slist[
@@ -177,19 +198,21 @@ def main(
 
 
 if __name__ == "__main__":
+    # 50k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-19-39-52
+    # 25k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-24-13-56-20
     # 10k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-16-19-09
     # 1k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-08-30-50
     policy_config = OpenaiInferenceConfig(
-        model="babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-16-19-09",
-        temperature=1.0, # try 0.6, 1.0
+        model="babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-19-39-52",
+        temperature=1.0,  # try 0.6, 1.0
         max_tokens=400,
         top_p=1.0,
         stop=END_TOKEN,
     )
 
     main(
-        sample_prompts=100,
-        rollouts_per_prompt=5,
+        sample_prompts=500,
+        rollouts_per_prompt=1,
         policy_model=policy_config,
         openai_api_key=OPENAI_KEY,
         test_dataset=TestDataset.HARMLESS_HELPFUL,
@@ -197,3 +220,10 @@ if __name__ == "__main__":
         helpful_model=ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46"),
         harmless_model=ModelId("babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12"),
     )
+
+    # 1,102,676 tokens for 6122 requests (samples)
+    # 1,102,676 / 6122 * 1000 = 180,116 tokens per 1000 samples
+    # 180,116 / 1000 * 0.0024 = $0.43 per 1000 samples
+
+    # We need to run 2 reward models, and 1 policy model
+    # 0.43 * 3 = $1.29 per 1000 samples

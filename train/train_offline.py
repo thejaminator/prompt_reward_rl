@@ -65,7 +65,7 @@ def main(policy_formatter: PolicyPromptFormatter, pair_limit: int) -> None:
         nonlocal counter
         counter += 1
         if counter % 200 == 0:
-            print(f"Processed {counter} prompts")
+            print(f"Processed {counter} pairs")
         return Slist(
             # Get rewards for both chosen and rejected
             [
@@ -107,9 +107,11 @@ def main(policy_formatter: PolicyPromptFormatter, pair_limit: int) -> None:
         completion_start_token="",
         completion_end_token=END_TOKEN,
     )
+    # TODO: Save rewards to file just in case?
 
 
 if __name__ == "__main__":
     policy_formatter = PolicyRewardAtBottomFormatter()
     # Run the main function
-    main(policy_formatter, pair_limit=100000)
+    # Try 1000, 10000, 50000, 75000
+    main(policy_formatter, pair_limit=25000)

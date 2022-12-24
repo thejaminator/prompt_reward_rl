@@ -155,10 +155,10 @@ def get_redis_cache_key(
 # Use frozenset to prevent mutable default errors https://docs.python-guide.org/writing/gotchas/
 @overload
 def redis_cache(
+    decode_dict: Literal[None] = ...,
     redis_database: redis.Redis[bytes] = ...,
     time_to_live: timedelta = ...,
     exclude_keys: FrozenSet[str] = ...,
-    decode_dict: Literal[None] = ...,
     ignore_value: Union[NativeJsonType, NoIgnoreSentinel] = ...,
     disable_cache: bool = ...,
 ) -> Callable[[NativeEncodeableReturnType], NativeEncodeableReturnType]:
@@ -167,10 +167,10 @@ def redis_cache(
 
 @overload
 def redis_cache(
+    decode_dict: Type[BaseModel] = ...,
     redis_database: redis.Redis[bytes] = ...,
     time_to_live: timedelta = ...,
     exclude_keys: FrozenSet[str] = ...,
-    decode_dict: Type[BaseModel] = ...,
     ignore_value: Union[PydanticType, NoIgnoreSentinel] = ...,
     disable_cache: bool = ...,
 ) -> Callable[[PydanticReturnType], PydanticReturnType]:

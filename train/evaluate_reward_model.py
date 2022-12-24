@@ -67,6 +67,8 @@ if __name__ == "__main__":
         openai_api_key=OPENAI_KEY,
         test_dataset=TestDataset.HARMLESS,
     )
-    # ~ 171000 tokens for 1000 pairs
-    # Babbage costs 0.0024 / 1K tokens
-    # 171000 / 1000 * 0.0024 = 0.41 to evaluate 1000 babbage pairs
+
+
+    # 1,102,676 tokens for 6122 requests (samples)
+    # 1,102,676 / 6122 * 1000 = 180,116 tokens per 1000 samples
+    # 180,116 / 1000 * 0.0024 = $0.43 to evaluate 1000 samples

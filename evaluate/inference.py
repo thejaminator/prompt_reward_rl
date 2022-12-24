@@ -112,6 +112,7 @@ def parse_gpt_response(
 
 
 @redis_cache(decode_dict=GPTFullResponse)
+
 def cached_get_openai_completion(
     config: OpenaiInferenceConfig,
     prompt: str,
