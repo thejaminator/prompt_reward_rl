@@ -65,7 +65,7 @@ We sampled 500 prompts from the test set, uniformly in the range of (0, 1) to ge
 These rewards were placed in the prompt for inference.
 The reward models calculated the "actual" reward of the completion. 
 
-\*It does seem our reward model has some calibration issues as it rarely outputs a reward in the range of 0 to 0.1 and 0.9 to 1.0
+\*Our reward model seems to have calibration issues as it rarely outputs a reward in the range of 0 to 0.1 and 0.9 to 1.0
 #### Sample efficiency of matching ability
 We investigate how many samples it takes our preliminary babbage model to matching the target reward.
 
