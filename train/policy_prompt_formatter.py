@@ -27,6 +27,9 @@ class PolicyPromptFormatter(ABC):
         with_reward: DialogueWithReward,
     ) -> PolicyPromptInfo:
         ...
+    @property
+    def name(self) -> str:
+        return self.__class__.__name__
 
 
 class PolicyRewardAtTopFormatter(PolicyPromptFormatter):

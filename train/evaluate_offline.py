@@ -8,6 +8,8 @@ from matplotlib.figure import Figure
 
 import neptune
 import neptune.new
+from neptune.new.types import File
+
 import pandas as pd
 import seaborn as sns
 from openai.error import RateLimitError
@@ -132,8 +134,6 @@ def extend_with_rollout_number(
     )
 
 
-
-
 @dataclasses.dataclass
 class ScatterplotResults:
     figure: Figure
@@ -174,7 +174,7 @@ def plot_scatterplot_and_correlation(
     pvalue: float = pearson.pvalue
 
     # set a title for the regplot
-    title_with_statistics = f"{title} Correlation: {correlation:.2f}, [{lower_bound:.2f}, {upper_bound:.2f}], P-value: {pvalue:.2f}"
+    title_with_statistics = f"{title} Correlation: {correlation:.2f}, [{lower_bound:.2f}, {upper_bound:.2f}]"
     plot.figure.suptitle(title_with_statistics)
     # set the labels for the x and y axes
     plot.set(xlabel=xlabel, ylabel=ylabel)
@@ -265,10 +265,6 @@ def plot_and_save_evaluations(
     target_helpful: Slist[float] = evaluations.map(lambda x: x.target_helpful)
     actual_helpful: Slist[float] = evaluations.map(lambda x: x.actual_helpful)
 
-    # write the results to pandas csv
-    df = pd.DataFrame(evaluations.map(lambda x: x.dict()))
-    df.to_csv("evaluate_offline.csv", index=False)
-
     harmless_results: ScatterplotResults = plot_scatterplot_and_correlation(
         x=actual_harmless,
         y=target_harmless,
@@ -294,7 +290,17 @@ def log_scatter_plots_to_neptune(
     neptune_api_key: str,
     neptune_project_name: str,
     neptune_run_id: str,
+    policy_config: OpenaiInferenceConfig,
+    helpful_model: ModelId,
+    harmless_model: ModelId,
+    formatter: PolicyPromptFormatter,
+    results_dataframe: pd.DataFrame,
+    number_samples: int,
+    rollouts_per_sample: int,
 ) -> None:
+    temperature = policy_config.temperature
+    # add the temperature to the evaluation_key
+    evaluation_key = f"evaluation_temp_{temperature}"
     helpful_results = scatter_plots.helpful
     harmless_results = scatter_plots.harmless
 
@@ -308,27 +314,60 @@ def log_scatter_plots_to_neptune(
         project=f"{neptune_project_name}",
         api_token=neptune_api_key,
     )
-    # Log the results under evaluation
-    run["evaluation/correlation_harmless"] = harmless_results.correlation
-    run["evaluation/pvalue_harmless"] = harmless_results.p_value
-    # upper bound
-    run["evaluation/upper_bound_harmless"] = harmless_results.upper_correlation_bound
-    # lower bound
-    run["evaluation/lower_bound_harmless"] = harmless_results.lower_correlation_bound
-    # confidence
-    run["evaluation/confidence_level_harmless"] = harmless_results.confidence_level
-    # Same thing for helpful
-    run["evaluation/correlation_helpful"] = helpful_results.correlation
-    run["evaluation/pvalue_helpful"] = helpful_results.p_value
-    # upper bound
-    run["evaluation/upper_bound_helpful"] = helpful_results.upper_correlation_bound
-    # lower bound
-    run["evaluation/lower_bound_helpful"] = helpful_results.lower_correlation_bound
-    # confidence
-    run["evaluation/confidence_level_helpful"] = helpful_results.confidence_level
-    # Log the plots
-    run["evaluation/helpful"].upload(helpful_results.figure)
-    run["evaluation/harmless"].upload(harmless_results.figure)
+    try:
+        # Log the config
+        run[f"{evaluation_key}/policy_config"] = policy_config.dict()
+        run[f"{evaluation_key}/helpful_model"] = helpful_model
+        run[f"{evaluation_key}/harmless_model"] = harmless_model
+        run[f"{evaluation_key}/policy_formatter"] = formatter.name
+        run[f"{evaluation_key}/number_samples"] = number_samples
+        run[f"{evaluation_key}/rollouts_per_sample"] = rollouts_per_sample
+        # Log the results under evaluation
+        run[f"{evaluation_key}/correlation_harmless"] = harmless_results.correlation
+        run[f"{evaluation_key}/pvalue_harmless"] = harmless_results.p_value
+        # upper bound
+        run[
+            f"{evaluation_key}/upper_bound_harmless"
+        ] = harmless_results.upper_correlation_bound
+        # lower bound
+        run[
+            f"{evaluation_key}/lower_bound_harmless"
+        ] = harmless_results.lower_correlation_bound
+        # confidence
+        run[
+            f"{evaluation_key}/confidence_level_harmless"
+        ] = harmless_results.confidence_level
+        # Same thing for helpful
+        run[f"{evaluation_key}/correlation_helpful"] = helpful_results.correlation
+        run[f"{evaluation_key}/pvalue_helpful"] = helpful_results.p_value
+        # upper bound
+        run[
+            f"{evaluation_key}/upper_bound_helpful"
+        ] = helpful_results.upper_correlation_bound
+        # lower bound
+        run[
+            f"{evaluation_key}/lower_bound_helpful"
+        ] = helpful_results.lower_correlation_bound
+        # confidence
+        run[
+            f"{evaluation_key}/confidence_level_helpful"
+        ] = helpful_results.confidence_level
+        # Log the plots
+        run[f"{evaluation_key}/helpful_plot"].upload(helpful_results.figure)
+        run[f"{evaluation_key}/harmless_plot"].upload(harmless_results.figure)
+        # Save the results dataframe as html
+        run[f"{evaluation_key}/evaluation_results_html"].upload(
+            File.as_html(results_dataframe)
+        )
+        # save the results dataframe as jsonl
+        results_jsonl = results_dataframe.to_json(orient="records", lines=True)
+        # write the jsonl to a file
+        evaluation_path = "evaluation_results.jsonl"
+        with open(evaluation_path, "w") as f:
+            f.write(results_jsonl)
+        run[f"{evaluation_key}/evaluation_results_jsonl"].upload(evaluation_path)
+    finally:
+        run.stop()
 
 
 if __name__ == "__main__":
@@ -344,27 +383,41 @@ if __name__ == "__main__":
         top_p=1.0,
         stop=END_TOKEN,
     )
-
+    helpful_model = ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46")
+    harmless_model = ModelId("babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12")
+    policy_formatter = PolicyRewardAtBottomFormatter()
+    number_samples = 500
+    rollouts_per_prompts = 1
     evaluations: Slist[HelpfulHarmlessEvaluation] = run_evaluation(
-        sample_prompts=500,
-        rollouts_per_prompt=1,
+        sample_prompts=number_samples,
+        rollouts_per_prompt=rollouts_per_prompts,
         policy_model=policy_config,
         openai_api_key=OPENAI_KEY,
         test_dataset=TestDataset.HARMLESS_HELPFUL,
-        policy_formatter=PolicyRewardAtBottomFormatter(),
-        helpful_model=ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46"),
-        harmless_model=ModelId("babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12"),
+        policy_formatter=policy_formatter,
+        helpful_model=helpful_model,
+        harmless_model=harmless_model,
     )
     # plot the results
     scatter_plots: HelpfulHarmlessScatterplots = plot_and_save_evaluations(
         evaluations=evaluations
     )
-    # save the results
+    # write the results to dataframe
+    df = pd.DataFrame(evaluations.map(lambda x: x.dict()))
+    # df.to_csv("evaluate_offline.csv", index=False)
+    # save the results to neptune
     log_scatter_plots_to_neptune(
         scatter_plots=scatter_plots,
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
         neptune_run_id="OF-8",
+        policy_config=policy_config,
+        helpful_model=helpful_model,
+        harmless_model=harmless_model,
+        formatter=policy_formatter,
+        results_dataframe=df,
+        number_samples=number_samples,
+        rollouts_per_sample=rollouts_per_prompts,
     )
 
     # 1,102,676 tokens for 6122 requests (samples)
