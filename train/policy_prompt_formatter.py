@@ -38,7 +38,7 @@ class PolicyPromptFormatter(ABC):
         return self.__class__.__name__
 
 
-class PolicyRewardAtBottomFormatter(PolicyPromptFormatter):
+class RewardAtBottomFormatter(PolicyPromptFormatter):
     @staticmethod
     def dialogue_reward_to_prompt_completion(
         with_reward: DialogueWithReward,
@@ -86,7 +86,7 @@ class PolicyRewardAtBottomFormatter(PolicyPromptFormatter):
         )
 
 
-class PolicyDuplicateRewardAtBottomFormatter(PolicyPromptFormatter):
+class DuplicateRewardAtBottomFormatter(PolicyPromptFormatter):
     @staticmethod
     def dialogue_reward_to_prompt_completion(
         with_reward: DialogueWithReward,
@@ -142,7 +142,7 @@ class PolicyDuplicateRewardAtBottomFormatter(PolicyPromptFormatter):
         )
 
 
-class PolicyRewardAtTopFormatter(PolicyPromptFormatter):
+class RewardAtTopFormatter(PolicyPromptFormatter):
     @staticmethod
     def dialogue_reward_to_prompt_completion(
         with_reward: DialogueWithReward,

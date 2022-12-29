@@ -45,3 +45,4 @@ if __name__ == "__main__":
         openai_key=OPENAI_KEY,
         neptune_api_key=NEPTUNE_KEY,
     )
+    # export PYTHONPATH=.; python train/rerun_log.py

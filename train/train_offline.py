@@ -16,7 +16,7 @@ from parsing.parse_raw import AnthropicRawFormat
 from settings import OFFLINE_POLICY_NEPTUNE_PROJECT
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
-    PolicyRewardAtBottomFormatter, PolicyRewardAtTopFormatter,
+    RewardAtBottomFormatter, RewardAtTopFormatter, DuplicateRewardAtBottomFormatter,
 )
 from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
 from train.separators import END_TOKEN
@@ -114,7 +114,8 @@ def train(
 
 
 if __name__ == "__main__":
-    policy_formatter = PolicyRewardAtTopFormatter()
+    # policy_formatter = RewardAtTopFormatter()
+    policy_formatter = DuplicateRewardAtBottomFormatter()
     finetune_params = FineTuneParams(
         model="babbage",
         n_epochs=1,
@@ -125,3 +126,4 @@ if __name__ == "__main__":
     # Run the main function
     # Try 1000, 10000, 25000, 50000, 75000
     train(policy_formatter, pair_limit=50000, finetune_params=finetune_params)
+    # export PYTHONPATH=.; python train/train_offline.py
