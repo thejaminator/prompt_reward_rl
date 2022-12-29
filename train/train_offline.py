@@ -15,7 +15,7 @@ from parsing.parse_raw import AnthropicRawFormat
 from settings import OFFLINE_POLICY_NEPTUNE_PROJECT
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
-    PolicyRewardAtBottomFormatter,
+    PolicyRewardAtBottomFormatter, PolicyRewardAtTopFormatter,
 )
 from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
 from train.separators import END_TOKEN
@@ -47,11 +47,11 @@ def get_offline_reward(
     )
 
 
-def main(
+def train(
     policy_formatter: PolicyPromptFormatter,
     pair_limit: int,
     finetune_params: FineTuneParams,
-) -> None:
+) -> ModelId:
     # Get the prompts
     raw_prompts: Slist[AnthropicRawFormat] = (
         get_harmless_helpful_train().shuffle(seed="999").take(pair_limit)
@@ -98,18 +98,18 @@ def main(
             x
         ).to_prompt_completion()
     )
-    logged_fine_tune(
+    model_id = logged_fine_tune(
         train=prompt_completions,
         params=finetune_params,
         project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
         completion_start_token="",
         completion_end_token=END_TOKEN,
     )
-    # TODO: Save rewards to file just in case?
+    return model_id
 
 
 if __name__ == "__main__":
-    policy_formatter = PolicyRewardAtBottomFormatter()
+    policy_formatter = PolicyRewardAtTopFormatter()
     finetune_params = FineTuneParams(
         model="babbage",
         n_epochs=1,
@@ -118,5 +118,5 @@ if __name__ == "__main__":
         prompt_loss_weight=0.1,
     )
     # Run the main function
-    # Try 1000, 10000, 25000, 50000, 75000, 100000
-    main(policy_formatter, pair_limit=100000, finetune_params=finetune_params)
+    # Try 1000, 10000, 25000, 50000, 75000
+    train(policy_formatter, pair_limit=25000, finetune_params=finetune_params)

@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from pydantic import BaseModel
 
 from api.prompt_completion import PromptCompletion
-from train.separators import START_REWARD_SEPARATOR, end_prompt_seperator
+from train.separators import START_REWARD_SEPARATOR, end_prompt_seperator, END_REWARD_SEPARATOR
 from train.reward_models import DialogueWithReward, HelpfulHarmlessReward
 
 
@@ -27,17 +27,10 @@ class PolicyPromptFormatter(ABC):
         with_reward: DialogueWithReward,
     ) -> PolicyPromptInfo:
         ...
+
     @property
     def name(self) -> str:
         return self.__class__.__name__
-
-
-class PolicyRewardAtTopFormatter(PolicyPromptFormatter):
-    @staticmethod
-    def dialogue_reward_to_prompt_completion(
-        with_reward: DialogueWithReward,
-    ) -> PolicyPromptInfo:
-        raise NotImplementedError
 
 
 class PolicyRewardAtBottomFormatter(PolicyPromptFormatter):
@@ -76,6 +69,57 @@ class PolicyRewardAtBottomFormatter(PolicyPromptFormatter):
             + f"Helpful reward: {helpful_reward_2dp}"
             + "\n"
             + f"Harmless reward: {harmless_reward_2dp}"
+            + end_prompt_seperator
+            + "\n\n"
+        )
+        completion = last_line
+        return PolicyPromptInfo(
+            dialogue_without_reward_without_completion=before_last_lines_formatted,
+            target_reward=with_reward.target_reward,
+            dialogue_with_reward_without_completion=dialogue_with_reward,
+            completion=completion,
+        )
+
+
+class PolicyRewardAtTopFormatter(PolicyPromptFormatter):
+    @staticmethod
+    def dialogue_reward_to_prompt_completion(
+        with_reward: DialogueWithReward,
+    ) -> PolicyPromptInfo:
+        """
+        # Prompt
+        <REWARD>
+        Helpful reward: 0.5
+        Harmless reward: 0.2
+        </REWARD>
+        Human: How do I kill someone
+
+        Assistant: Who do you want to kill?
+
+        Human: The president
+        <SOS>
+
+        # Completion
+        Assistant: I would attack him with a frying pan
+        """
+        helpful_reward_2dp: str = str(round(with_reward.target_reward.helpful, 2))
+        harmless_reward_2dp: str = str(round(with_reward.target_reward.harmless, 2))
+        # you need to separate the last "assistant" from the prompt
+        conversation_lines: list[str] = with_reward.dialogue.strip().split("\n\n")
+        last_line: str = conversation_lines[-1]
+        before_last_lines: list[str] = conversation_lines[:-1]
+        before_last_lines_formatted = "\n\n".join(before_last_lines)
+
+        dialogue_with_reward: str = (
+            START_REWARD_SEPARATOR
+            + "\n"
+            + f"Helpful reward: {helpful_reward_2dp}"
+            + "\n"
+            + f"Harmless reward: {harmless_reward_2dp}"
+            + END_REWARD_SEPARATOR
+            + "\n"
+            + before_last_lines_formatted
+            + "\n"
             + end_prompt_seperator
             + "\n\n"
         )

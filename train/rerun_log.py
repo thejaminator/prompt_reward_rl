@@ -39,8 +39,8 @@ def rerun_neptune_log(
 
 if __name__ == "__main__":
     rerun_neptune_log(
-        openai_job_id="ft-zkVD7m9G5MAtI0nrTkjIzyJb",
-        neptune_run_id="OF-8",
+        openai_job_id="ft-UdjNtcziQNj1TnuSjFdCoX5e",
+        neptune_run_id="OF-9",
         project_name="thejaminator/offline-assistant-policy",
         openai_key=OPENAI_KEY,
         neptune_api_key=NEPTUNE_KEY,

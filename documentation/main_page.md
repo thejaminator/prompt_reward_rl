@@ -1,16 +1,16 @@
 # Aligning Language Models by putting the reward in the prompt
-We investigate "Upside-Down" reinforcement learning models by fine-tuning a language model on purely textual data with rewards in the text.
+We investigate ["Upside-Down"](https://arxiv.org/abs/1912.02875) reinforcement learning models by fine-tuning a language model on purely textual data with rewards in the text.
 We utilize human feedback data from [Anthropic](https://github.com/anthropics/hh-rlhf) to train a reward model. Next, we put that reward as text in the prompt. Using OpeniAI's fine-tuning API,
 we finetune a policy model that uses a desired reward to complete the text.
 Like [Decision Transformers](https://arxiv.org/abs/2106.01345), we show that our language model can generate completions that match the desired reward well.
 
-Note: This is still a work in progress. We aim to provide a vertical slice of results in this repo.
+Note: This is still a work in progress. We aim to provide a vertical slice of results in this repo. Results may change as we experiment with larger models.
 ## Introduction
 Currently most RLHF methods utilize PPO ([Instruct-GPT](https://arxiv.org/abs/2203.02155), [Anthropic](https://arxiv.org/abs/2204.05862))
 to train a policy model. However, it is desirable to explore other methods of RLHF for the following reasons:
 ### Ability to specify different target rewards during inference
 In PPO, the policy model will always try to maximize the reward.
-However, in certain use cases, it may be desirable to specify different target rewards during inference.
+However, it may be desirable to specify different target rewards during inference.
 In [Anthropic's assistant model](https://arxiv.org/abs/2204.05862), the reward is a mix of helpfulness and harmlessness.
 In reality these two metrics can cause conflict. 
 We may want to specify a lower target helpfulness to lower the risk of the model giving helpful but harmful advice.
@@ -35,9 +35,6 @@ These rewards are placed in the prompt for training the policy model.
 Unlike Decision Transformers we do not represent the rewards in separate scalars. 
 Instead, we place the rewards literally as text in the prompt. This allows us to finetune the policy model using the OpenAI finetuning API.
 
-<details>
-<summary>View example policy prompt</summary>
-
 ```
 Human: So my girlfriend wants to leave me. What should I do?
 
@@ -48,17 +45,13 @@ Human: I'm thinking I'll get her name tattooed on me.
 Helpful reward: 0.42
 Harmless reward: 0.75<SOS>
 ```
-</details>
 
 We then utilise the completion from the dataset for training.
-
-<details>
-<summary>View example policy completion</summary>
 
 ```
 Assistant: Oh, that's not a good idea! I don't think it's a good idea to get tattoos, and I don't think you should get any tattoos. I think it's more important to focus on improving your relationship with her.
 ```
-</details>
+
 
 ### Ability to match target reward
 We evaluate the ability of the policy model to match the target reward.
@@ -67,25 +60,25 @@ We evaluate the ability of the policy model to match the target reward.
 Preliminary results from training a babbage sized model show that the policy model matches the reward model well for helpfulness. 
 However, for harmlessness the model does not perform as well.
 
-To construct the correlation plot, we used a model trained offline on 150,0000 training samples (75,000 pairs) for 1 epoch.
-
-We sampled 500 prompts from the test set.
-
-We sampled uniformly in the range of (0, 1) to get the target harmless and helpful rewards. These rewards were sampled individually and are not correlated.
-
+To construct the correlation plot, we used a model trained offline on 150,0000 training samples (75,000 pairs) for 1 epoch. 
+We sampled 500 prompts from the test set, uniformly in the range of (0, 1) to get the target harmless and helpful rewards. These rewards were sampled individually and are not correlated.
 These rewards were placed in the prompt for inference.
+The reward models calculated the "actual" reward of the completion. 
 
-We then used our reward model to calculate the "actual" reward of the completion. 
-
-*It does seem our reward model has some calibration issues as it rarely outputs a reward in the range of 0 to 0.1 and 0.9 to 1.0
+\*It does seem our reward model has some calibration issues as it rarely outputs a reward in the range of 0 to 0.1 and 0.9 to 1.0
 #### Sample efficiency of matching ability
-We show the sample efficiency of our preliminary babbage model in matching the target reward.
+We investigate how many samples it takes our preliminary babbage model to matching the target reward.
+
 ![sample_efficiency_babbage_1_epoch.png](images%2Fsample_efficiency_babbage_1_epoch.png)
-Training examples below 50,000 training examples did not result in any statistically significant correlation.
+
+Less than 50,000 training examples did not result in any statistically significant correlation.
 Only at 100,000 training examples did we see a visible effect of the target reward on the actual reward of the completion.
 
 \* In the future, we would like to compare this with larger model sizes - curie and davinci.
-#### More epochs?
+#### Do more epochs improve reward matching ability?
+We investigate if more epochs during offline training improves reward matching ability.
+This avoids having to obtain more offline training data.
+
 
 ## Reward model details
 
