@@ -82,7 +82,7 @@ We then used our reward model to calculate the "actual" reward of the completion
 We show the sample efficiency of our preliminary babbage model in matching the target reward.
 
 
-
+* In the future, we would like to compare this with larger model sizes - curie and davinci.
 #### More epochs?
 
 ## Reward model details
@@ -91,3 +91,10 @@ We show the sample efficiency of our preliminary babbage model in matching the t
 #### Does duplicating the reward tokens in the prompt help?
 
 #### Does the location of the reward tokens in the prompt matter?
+
+
+#### Compare vs normal model trained with the same number of steps / tokens. To account for the fact that maybe the increased reward comes from lower entropy. 
+#### Compare vs a model on pure chosen examples. Probably won't be better. But in real life you probably don't have so much human labelled examples. The upside of having a reward model is that you can keep having assigned rewards to new examples. Rather than continuing to pay for human labels. Also maybe have to control for temperature here. Since the entropy of the model affects the reward, and now the two models have been trained for different amount of tokens.
+
+#### Cost breakdown
+Could be useful for other researchers

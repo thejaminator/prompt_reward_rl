@@ -32,7 +32,12 @@ from evaluate.inference import (
     cached_get_openai_completion,
 )
 from parsing.parse_raw import AnthropicRawFormat
-from settings import OPENAI_KEY, NEPTUNE_KEY, OFFLINE_POLICY_NEPTUNE_PROJECT
+from settings import (
+    OPENAI_KEY,
+    NEPTUNE_KEY,
+    OFFLINE_POLICY_NEPTUNE_PROJECT,
+    MODEL_ID_NEPTUNE_KEY,
+)
 from train.evaluate_reward_model import (
     TestDataset,
     get_harmless_helpful_test,
@@ -370,14 +375,37 @@ def log_scatter_plots_to_neptune(
         run.stop()
 
 
+def get_openai_model_from_neptune(
+    neptune_api_key: str,
+    neptune_project_name: str,
+    neptune_run_id: str,
+) -> ModelId:
+    run = neptune.new.init_run(
+        with_id=neptune_run_id,
+        project=f"{neptune_project_name}",
+        api_token=neptune_api_key,
+    )
+    model_id: ModelId = run[MODEL_ID_NEPTUNE_KEY].fetch()
+    assert model_id is not None, "Model id is None"
+    run.stop()
+    return model_id
+
+
 if __name__ == "__main__":
     # 75k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17
     # 50k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-19-39-52
     # 25k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-24-13-56-20
     # 10k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-16-19-09
     # 1k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-08-30-50
+    # Optionally retrieve the openai model id from neptune
+    run_id = "OF-7"
+    policy_model_id = get_openai_model_from_neptune(
+        neptune_api_key=NEPTUNE_KEY,
+        neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
+        neptune_run_id=run_id,
+    )
     policy_config = OpenaiInferenceConfig(
-        model="babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17",
+        model=policy_model_id,  # You can set this manually too
         temperature=1.0,  # try 0.6, 1.0
         max_tokens=400,
         top_p=1.0,
@@ -410,7 +438,7 @@ if __name__ == "__main__":
         scatter_plots=scatter_plots,
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
-        neptune_run_id="OF-8",
+        neptune_run_id=run_id,
         policy_config=policy_config,
         helpful_model=helpful_model,
         harmless_model=harmless_model,

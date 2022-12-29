@@ -10,7 +10,7 @@ from openai.validators import get_common_xfix
 
 from api.openai_fine_tune import ModelId, FineTuneParams, fine_tune_result, await_fine_tune_finish, fine_tune
 from api.set_key import set_openai_key
-from settings import NEPTUNE_KEY, DEFAULT_OPENAI_KEY
+from settings import NEPTUNE_KEY, DEFAULT_OPENAI_KEY, MODEL_ID_NEPTUNE_KEY
 from api.prompt_completion import PromptCompletion
 
 """Calls openai to finetune a model. Makes sure to log hyperparameters and the data to neptune."""
@@ -114,7 +114,7 @@ def logged_fine_tune(
         model_id = await_fine_tune_finish(job_id)
         print("Fine-tune succeeded")
         print(f"Uploaded model: {model_id}")
-        run["model_id"] = model_id
+        run[MODEL_ID_NEPTUNE_KEY] = model_id
 
         result = fine_tune_result(job_id)
         # Add metrics to draw charts
