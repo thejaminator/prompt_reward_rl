@@ -8,6 +8,7 @@ from matplotlib.figure import Figure
 
 import neptune
 import neptune.new
+from neptune.new import Run
 from neptune.new.types import File
 
 import pandas as pd
@@ -375,15 +376,28 @@ def log_scatter_plots_to_neptune(
         run.stop()
 
 
+def get_neptune_run(
+    neptune_api_key: str,
+    neptune_project_name: str,
+    neptune_run_id: str,
+) -> Run:
+    run = neptune.new.init_run(
+        with_id=neptune_run_id,
+        project=f"{neptune_project_name}",
+        api_token=neptune_api_key,
+    )
+    return run
+
+
 def get_openai_model_from_neptune(
     neptune_api_key: str,
     neptune_project_name: str,
     neptune_run_id: str,
 ) -> ModelId:
-    run = neptune.new.init_run(
-        with_id=neptune_run_id,
-        project=f"{neptune_project_name}",
-        api_token=neptune_api_key,
+    run = get_neptune_run(
+        neptune_api_key=neptune_api_key,
+        neptune_project_name=neptune_project_name,
+        neptune_run_id=neptune_run_id,
     )
     model_id: ModelId = run[MODEL_ID_NEPTUNE_KEY].fetch()
     assert model_id is not None, "Model id is None"
@@ -455,49 +469,3 @@ if __name__ == "__main__":
     # We need to run 2 reward models, and 1 policy model
     # For babbage
     # 0.43 * 3 = $1.29 per 1000 samples
-
-
-"""
-50k pairs 1 epoch babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-19-39-52
-Correlation of Harmless: 0.4018466150206259
-P-value of Harmless: 7.932319913553483e-21
-Correlation of Helpful: 0.5975499654582968
-P-value of Helpful: 1.020049641825224e-49
-"""
-
-"""
-25k pairs 1 epoch babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-24-13-56-20
-Correlation of Harmless: 0.12090838467809116
-P-value of Harmless: 0.006794263800119504
-Correlation of Helpful: 0.10119615196200746
-P-value of Helpful: 0.023637962495691566
-"""
-
-
-"""
-25k pairs 2 epoch babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-24-15-37-58
-Correlation of Harmless: 0.4608514258097976
-P-value of Harmless: 1.171374177122244e-27
-Correlation of Helpful: 0.5141776347185677
-P-value of Helpful: 4.330503887332476e-35
-"""
-
-
-"""
-25k pairs 1 epoch 0.2 LR babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-25-16-30-56
-Correlation of Harmless: 0.13917933629910742
-P-value of Harmless: 0.0018112680737807725
-Correlation of Helpful: 0.3696280733488435
-P-value of Helpful: 1.2407807868417206e-17
-"""
-
-"""
-75k pairs 1 epoch 0.1 LR babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17
-Correlation of Harmless: 0.44499624227282225
-P-value of Harmless: 1.0909358121477341e-25
-Correlation of Helpful: 0.7367199741380459
-P-value of Helpful: 1.1530716525636383e-86
-"""
-
-# Next step
-# Slice of report showing that it correlates to target reward

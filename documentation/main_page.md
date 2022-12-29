@@ -80,9 +80,11 @@ We then used our reward model to calculate the "actual" reward of the completion
 *It does seem our reward model has some calibration issues as it rarely outputs a reward in the range of 0 to 0.1 and 0.9 to 1.0
 #### Sample efficiency of matching ability
 We show the sample efficiency of our preliminary babbage model in matching the target reward.
+![sample_efficiency_babbage_1_epoch.png](images%2Fsample_efficiency_babbage_1_epoch.png)
+Training examples below 50,000 training examples did not result in any statistically significant correlation.
+Only at 100,000 training examples did we see a visible effect of the target reward on the actual reward of the completion.
 
-
-* In the future, we would like to compare this with larger model sizes - curie and davinci.
+\* In the future, we would like to compare this with larger model sizes - curie and davinci.
 #### More epochs?
 
 ## Reward model details
