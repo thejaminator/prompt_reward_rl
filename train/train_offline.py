@@ -12,6 +12,7 @@ from evaluate.classification import (
     get_positive_class_proba,
 )
 from parsing.parse_raw import AnthropicRawFormat
+from settings import OFFLINE_POLICY_NEPTUNE_PROJECT
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyRewardAtBottomFormatter,
@@ -100,7 +101,7 @@ def main(
     logged_fine_tune(
         train=prompt_completions,
         params=finetune_params,
-        project_name="thejaminator/offline-assistant-policy",
+        project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
         completion_start_token="",
         completion_end_token=END_TOKEN,
     )

@@ -1,9 +1,13 @@
+import dataclasses
 import random
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Any
 
+import neptune
+import neptune.new
 import seaborn as sns
 import pandas as pd
+from matplotlib.backend_bases import FigureCanvasBase
 from openai.error import RateLimitError
 from pydantic import BaseModel
 from retry import retry
@@ -24,7 +28,7 @@ from evaluate.inference import (
     cached_get_openai_completion,
 )
 from parsing.parse_raw import AnthropicRawFormat
-from settings import OPENAI_KEY
+from settings import OPENAI_KEY, NEPTUNE_KEY, OFFLINE_POLICY_NEPTUNE_PROJECT
 from train.evaluate_reward_model import (
     TestDataset,
     get_harmless_helpful_test,
@@ -126,10 +130,19 @@ def extend_with_rollout_number(
     )
 
 
-# use seaborn to plot the results. return the axis object
-def plot_scatterplot(
+@dataclasses.dataclass
+class ScatterplotResults:
+    figure: FigureCanvasBase
+    correlation: float
+    p_value: float
+    confidence_level: float
+    upper_correlation_bound: float
+    lower_correlation_bound: float
+
+
+def plot_scatterplot_and_correlation(
     x: List[float], y: List[float], title: str, xlabel: str, ylabel: str
-):
+) -> ScatterplotResults:
     # clear seaborn
     sns.reset_orig()
     # use seaborn style defaults and set the default figure size
@@ -145,8 +158,9 @@ def plot_scatterplot(
         x=x,
         y=y,
     )
+    confidence_level = 0.95
     confidence_interval: ConfidenceInterval = pearson.confidence_interval(
-        confidence_level=0.95
+        confidence_level=confidence_level
     )
     lower_bound = confidence_interval[0]
     upper_bound = confidence_interval[1]
@@ -163,9 +177,17 @@ def plot_scatterplot(
     # write to an image
     plot.figure.savefig(f"{title}.png")
     plot.clear()
+    return ScatterplotResults(
+        figure=plot,
+        correlation=correlation,
+        p_value=pvalue,
+        confidence_level=confidence_level,
+        upper_correlation_bound=upper_bound,
+        lower_correlation_bound=lower_bound,
+    )
 
 
-def main(
+def run_evaluation(
     sample_prompts: int,
     policy_model: OpenaiInferenceConfig,
     helpful_model: ModelId,
@@ -174,7 +196,7 @@ def main(
     test_dataset: TestDataset,
     rollouts_per_prompt: int,
     policy_formatter: PolicyPromptFormatter,
-):
+) -> Slist[HelpfulHarmlessEvaluation]:
     threadpool = ThreadPoolExecutor(max_workers=20)
     set_openai_key(openai_api_key)
     seed = "999"
@@ -219,37 +241,30 @@ def main(
         ),
         executor=threadpool,
     )
+    return evaluations
+
+
+@dataclasses.dataclass
+class HelpfulHarmlessScatterplots:
+    helpful: ScatterplotResults
+    harmless: ScatterplotResults
+
+
+def plot_and_save_evaluations(
+    evaluations: Slist[HelpfulHarmlessEvaluation],
+) -> HelpfulHarmlessScatterplots:
     # Calculate correlation coefficient of harmless
     target_harmless: Slist[float] = evaluations.map(lambda x: x.target_harmless)
     actual_harmless: Slist[float] = evaluations.map(lambda x: x.actual_harmless)
-    pearson_harmless: _result_classes.PearsonRResult = pearsonr(
-        x=target_harmless,
-        y=actual_harmless,
-    )
-    correlation_harmless = pearson_harmless.statistic
-    pvalue_harmless = pearson_harmless.pvalue
 
     target_helpful: Slist[float] = evaluations.map(lambda x: x.target_helpful)
     actual_helpful: Slist[float] = evaluations.map(lambda x: x.actual_helpful)
-    # Calculate correlation coefficient of helpful
-    pearson_helpful: _result_classes.PearsonRResult = pearsonr(
-        x=target_helpful,
-        y=actual_helpful,
-    )
-    correlation_helpful = pearson_helpful.statistic
-    pvalue_helpful = pearson_helpful.pvalue
-
-    # Print the results
-    print(f"Correlation of Harmless: {correlation_harmless}")
-    print(f"P-value of Harmless: {pvalue_harmless}")
-    print(f"Correlation of Helpful: {correlation_helpful}")
-    print(f"P-value of Helpful: {pvalue_helpful}")
 
     # write the results to pandas csv
     df = pd.DataFrame(evaluations.map(lambda x: x.dict()))
     df.to_csv("evaluate_offline.csv", index=False)
 
-    plot_scatterplot(
+    harmless_results: ScatterplotResults = plot_scatterplot_and_correlation(
         x=actual_harmless,
         y=target_harmless,
         title="Harmless",
@@ -257,13 +272,58 @@ def main(
         ylabel="Target",
     )
 
-    plot_scatterplot(
+    helpful_results = plot_scatterplot_and_correlation(
         x=actual_helpful,
         y=target_helpful,
         title="Helpful",
         xlabel="Actual",
         ylabel="Target",
     )
+    return HelpfulHarmlessScatterplots(
+        helpful=helpful_results, harmless=harmless_results
+    )
+
+
+def log_scatter_plots_to_neptune(
+    scatter_plots: HelpfulHarmlessScatterplots,
+    neptune_api_key: str,
+    neptune_project_name: str,
+    neptune_run_id: str,
+) -> None:
+    helpful_results = scatter_plots.helpful
+    harmless_results = scatter_plots.harmless
+
+    # Print the results
+    print(f"Correlation of Harmless: {harmless_results.correlation}")
+    print(f"Correlation of Helpful: {helpful_results.correlation}")
+
+    # Save to neptune
+    run = neptune.new.init_run(
+        with_id=neptune_run_id,
+        project=f"{neptune_project_name}",
+        api_token=neptune_api_key,
+    )
+    # Log the results under evaluation
+    run["evaluation/correlation_harmless"] = harmless_results.correlation
+    run["evaluation/pvalue_harmless"] = harmless_results.p_value
+    # upper bound
+    run["evaluation/upper_bound_harmless"] = harmless_results.upper_correlation_bound
+    # lower bound
+    run["evaluation/lower_bound_harmless"] = harmless_results.lower_correlation_bound
+    # confidence
+    run["evaluation/confidence_level_harmless"] = harmless_results.confidence_level
+    # Same thing for helpful
+    run["evaluation/correlation_helpful"] = helpful_results.correlation
+    run["evaluation/pvalue_helpful"] = helpful_results.p_value
+    # upper bound
+    run["evaluation/upper_bound_helpful"] = helpful_results.upper_correlation_bound
+    # lower bound
+    run["evaluation/lower_bound_helpful"] = helpful_results.lower_correlation_bound
+    # confidence
+    run["evaluation/confidence_level_helpful"] = helpful_results.confidence_level
+    # Log the plots
+    run["evaluation/harmless"].upload(harmless_results.figure)
+    run["evaluation/helpful"].upload(helpful_results.figure)
 
 
 if __name__ == "__main__":
@@ -280,7 +340,7 @@ if __name__ == "__main__":
         stop=END_TOKEN,
     )
 
-    main(
+    evaluations: Slist[HelpfulHarmlessEvaluation] = run_evaluation(
         sample_prompts=500,
         rollouts_per_prompt=1,
         policy_model=policy_config,
@@ -289,6 +349,17 @@ if __name__ == "__main__":
         policy_formatter=PolicyRewardAtBottomFormatter(),
         helpful_model=ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46"),
         harmless_model=ModelId("babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12"),
+    )
+    # plot the results
+    scatter_plots: HelpfulHarmlessScatterplots = plot_and_save_evaluations(
+        evaluations=evaluations
+    )
+    # save the results
+    log_scatter_plots_to_neptune(
+        scatter_plots=scatter_plots,
+        neptune_api_key=NEPTUNE_KEY,
+        neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
+        neptune_run_id="OF-8",
     )
 
     # 1,102,676 tokens for 6122 requests (samples)
