@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 
+from neptune.new import Run
 from pydantic import BaseModel
 from slist import Slist
 
@@ -98,12 +99,16 @@ def train(
             x
         ).to_prompt_completion()
     )
+    # add formatter
+    def neptune_pretrain_callable(run: Run) -> None:
+        run["policy_formatter"] = policy_formatter.name
     model_id = logged_fine_tune(
         train=prompt_completions,
         params=finetune_params,
         project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
         completion_start_token="",
         completion_end_token=END_TOKEN,
+        neptune_pretrain_callable=neptune_pretrain_callable,
     )
     return model_id
 
@@ -119,4 +124,4 @@ if __name__ == "__main__":
     )
     # Run the main function
     # Try 1000, 10000, 25000, 50000, 75000
-    train(policy_formatter, pair_limit=25000, finetune_params=finetune_params)
+    train(policy_formatter, pair_limit=50000, finetune_params=finetune_params)
