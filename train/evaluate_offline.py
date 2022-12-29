@@ -1,13 +1,15 @@
 import dataclasses
 import random
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Any
+from typing import List
+
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 import neptune
 import neptune.new
-import seaborn as sns
 import pandas as pd
-from matplotlib.backend_bases import FigureCanvasBase
+import seaborn as sns
 from openai.error import RateLimitError
 from pydantic import BaseModel
 from retry import retry
@@ -130,9 +132,11 @@ def extend_with_rollout_number(
     )
 
 
+
+
 @dataclasses.dataclass
 class ScatterplotResults:
-    figure: FigureCanvasBase
+    figure: Figure
     correlation: float
     p_value: float
     confidence_level: float
@@ -145,12 +149,14 @@ def plot_scatterplot_and_correlation(
 ) -> ScatterplotResults:
     # clear seaborn
     sns.reset_orig()
+    f, axes = plt.subplots(1)
     # use seaborn style defaults and set the default figure size
     sns.set(rc={"figure.figsize": (8, 8)})
     # use x and y as the data, assign to the variables called x and y
     # use the function regplot to make a scatterplot
     # color the scatterplot points blue
-    plot = sns.regplot(x=x, y=y, color="b", line_kws={"color": "red"})
+    # pass axes so you don't overwrite the same plots
+    plot = sns.regplot(x=x, y=y, color="b", line_kws={"color": "red"}, ax=axes)
     # add a (1, 1) line to show perfect correlation
     plot.plot([0, 1], [0, 1], transform=plot.transAxes, ls="--", c=".3")
     # Calculate the correlation coefficient between x and y
@@ -174,11 +180,10 @@ def plot_scatterplot_and_correlation(
     plot.set(xlabel=xlabel, ylabel=ylabel)
     # set the x and y axis to (0, 1)
     plot.set(xlim=(0, 1), ylim=(0, 1))
-    # write to an image
-    plot.figure.savefig(f"{title}.png")
-    plot.clear()
+    figure = plot.figure
+
     return ScatterplotResults(
-        figure=plot,
+        figure=figure,
         correlation=correlation,
         p_value=pvalue,
         confidence_level=confidence_level,
@@ -322,8 +327,8 @@ def log_scatter_plots_to_neptune(
     # confidence
     run["evaluation/confidence_level_helpful"] = helpful_results.confidence_level
     # Log the plots
-    run["evaluation/harmless"].upload(harmless_results.figure)
     run["evaluation/helpful"].upload(helpful_results.figure)
+    run["evaluation/harmless"].upload(harmless_results.figure)
 
 
 if __name__ == "__main__":
