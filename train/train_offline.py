@@ -46,7 +46,11 @@ def get_offline_reward(
     )
 
 
-def main(policy_formatter: PolicyPromptFormatter, pair_limit: int) -> None:
+def main(
+    policy_formatter: PolicyPromptFormatter,
+    pair_limit: int,
+    finetune_params: FineTuneParams,
+) -> None:
     # Get the prompts
     raw_prompts: Slist[AnthropicRawFormat] = (
         get_harmless_helpful_train().shuffle(seed="999").take(pair_limit)
@@ -93,13 +97,6 @@ def main(policy_formatter: PolicyPromptFormatter, pair_limit: int) -> None:
             x
         ).to_prompt_completion()
     )
-    finetune_params = FineTuneParams(
-        model="babbage",
-        n_epochs=1,
-        learning_rate_multiplier=0.1,
-        batch_size=32,
-        prompt_loss_weight=0.1,
-    )
     logged_fine_tune(
         train=prompt_completions,
         params=finetune_params,
@@ -112,6 +109,13 @@ def main(policy_formatter: PolicyPromptFormatter, pair_limit: int) -> None:
 
 if __name__ == "__main__":
     policy_formatter = PolicyRewardAtBottomFormatter()
+    finetune_params = FineTuneParams(
+        model="babbage",
+        n_epochs=1,
+        learning_rate_multiplier=0.1,
+        batch_size=32,
+        prompt_loss_weight=0.1,
+    )
     # Run the main function
-    # Try 1000, 10000, 50000, 75000
-    main(policy_formatter, pair_limit=25000)
+    # Try 1000, 10000, 25000, 50000, 75000, 100000
+    main(policy_formatter, pair_limit=100000, finetune_params=finetune_params)
