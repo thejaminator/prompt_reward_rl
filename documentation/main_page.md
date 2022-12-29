@@ -60,7 +60,34 @@ Assistant: Oh, that's not a good idea! I don't think it's a good idea to get tat
 ```
 </details>
 
-### Offline reinforcement learning evaluation
-We demonstrate the ability of the policy model to 
+### Ability to match target reward
+We evaluate the ability of the policy model to match the target reward.
+![harmless_plot_temp_1.png](images%2Fharmless_plot_temp_1.png) ![helpful_plot_temp_1.png](images%2Fhelpful_plot_temp_1.png)
+
+Preliminary results from training a babbage sized model show that the policy model matches the reward model well for helpfulness. 
+However, for harmlessness the model does not perform as well.
+
+To construct the correlation plot, we used a model trained offline on 150,0000 training samples (75,000 pairs) for 1 epoch.
+
+We sampled 500 prompts from the test set.
+
+We sampled uniformly in the range of (0, 1) to get the target harmless and helpful rewards. These rewards were sampled individually and are not correlated.
+
+These rewards were placed in the prompt for inference.
+
+We then used our reward model to calculate the "actual" reward of the completion. 
+
+*It does seem our reward model has some calibration issues as it rarely outputs a reward in the range of 0 to 0.1 and 0.9 to 1.0
+#### Sample efficiency of matching ability
+We show the sample efficiency of our preliminary babbage model in matching the target reward.
+
+
+
+#### More epochs?
 
 ## Reward model details
+
+
+#### Does duplicating the reward tokens in the prompt help?
+
+#### Does the location of the reward tokens in the prompt matter?
