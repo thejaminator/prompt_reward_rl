@@ -9,7 +9,7 @@ Note: This is still a work in progress. We aim to provide a vertical slice of re
 Currently most RLHF methods utilize PPO ([Instruct-GPT](https://arxiv.org/abs/2203.02155), [Anthropic](https://arxiv.org/abs/2204.05862))
 to train a policy model. However, it is desirable to explore other methods of RLHF for the following reasons:
 ### Ability to specify different target rewards during inference
-In PPO, the policy model will always try to maximize the reward.
+In PPO, we train the policy model to maximize the reward.
 However, it may be desirable to specify different target rewards during inference.
 In [Anthropic's assistant model](https://arxiv.org/abs/2204.05862), the reward is a mix of helpfulness and harmlessness.
 In reality these two metrics can cause conflict. 
@@ -63,11 +63,12 @@ However, for harmlessness the model does not perform as well.
 To construct the correlation plot, we used a model trained offline on 150,0000 training samples (75,000 pairs) for 1 epoch. 
 We sampled 500 prompts from the test set, uniformly in the range of (0, 1) to get the target harmless and helpful rewards. These rewards were sampled individually and are not correlated.
 These rewards were placed in the prompt for inference.
-The reward models calculated the "actual" reward of the completion. 
+During inference, we used a temperature of 1.0.
+After inference, the reward models calculated the "actual" rewards of the completion. 
 
 \*Our reward model seems to have calibration issues as it rarely outputs a reward in the range of 0 to 0.1 and 0.9 to 1.0
 #### Sample efficiency of matching ability
-We investigate how many samples it takes our preliminary babbage model to matching the target reward.
+We investigate how many samples it takes our preliminary babbage model to match the target reward.
 
 ![sample_efficiency_babbage_1_epoch.png](images%2Fsample_efficiency_babbage_1_epoch.png)
 
@@ -75,9 +76,11 @@ Less than 50,000 training examples did not result in any statistically significa
 Only at 100,000 training examples did we see a visible effect of the target reward on the actual reward of the completion.
 
 \* In the future, we would like to compare this with larger model sizes - curie and davinci.
-#### Do more epochs improve reward matching ability?
-We investigate if more epochs during offline training improves reward matching ability.
-This avoids having to obtain more offline training data.
+\* TODO: Control for temperature since the better performance can simply be a result of the model having a lower entropy. Sweep for different temperatures and obtain the best scores. 
+
+#### Effect of more epochs
+We investigate if the increased matching abilities stems from having more unique offline training examples or simply due to more training steps.
+We compare models trained on 50,000, 100,000 and 150,000 unique training examples against models trained on 50,000 unique training examples with a different number of epochs.
 
 
 ## Reward model details

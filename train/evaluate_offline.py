@@ -48,7 +48,7 @@ from train.evaluate_reward_model import (
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
-    RewardAtBottomFormatter,
+    RewardAtBottomFormatter, RewardAtTopFormatter, DuplicateRewardAtBottomFormatter,
 )
 from train.reward_models import DialogueWithReward, HelpfulHarmlessReward
 from train.separators import END_TOKEN
@@ -406,13 +406,8 @@ def get_openai_model_from_neptune(
 
 
 if __name__ == "__main__":
-    # 75k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17
-    # 50k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-19-39-52
-    # 25k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-24-13-56-20
-    # 10k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-16-19-09
-    # 1k pairs babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-23-08-30-50
     # Optionally retrieve the openai model id from neptune
-    run_id = "OF-9"
+    run_id = "OF-12"
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
@@ -427,7 +422,7 @@ if __name__ == "__main__":
     )
     helpful_model = ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46")
     harmless_model = ModelId("babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12")
-    policy_formatter = RewardAtBottomFormatter()
+    policy_formatter = DuplicateRewardAtBottomFormatter()
     number_samples = 500
     rollouts_per_prompts = 1
     evaluations: Slist[HelpfulHarmlessEvaluation] = run_evaluation(

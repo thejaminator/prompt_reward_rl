@@ -114,14 +114,14 @@ def train(
 
 
 if __name__ == "__main__":
-    # policy_formatter = RewardAtTopFormatter()
-    policy_formatter = DuplicateRewardAtBottomFormatter()
+    policy_formatter = RewardAtTopFormatter()
+    # policy_formatter = DuplicateRewardAtBottomFormatter()
     finetune_params = FineTuneParams(
         model="babbage",
         n_epochs=1,
         learning_rate_multiplier=0.1,
         batch_size=32,
-        prompt_loss_weight=0.1,
+        prompt_loss_weight=0.0,
     )
     # Run the main function
     # Try 1000, 10000, 25000, 50000, 75000
