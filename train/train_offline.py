@@ -114,7 +114,7 @@ def train(
 
 
 if __name__ == "__main__":
-    policy_formatter = RewardAtTopFormatter()
+    policy_formatter = RewardAtBottomFormatter()
     # policy_formatter = DuplicateRewardAtBottomFormatter()
     finetune_params = FineTuneParams(
         model="babbage",

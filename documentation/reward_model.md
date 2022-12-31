@@ -3,7 +3,7 @@
 Anthropic's dataset contains 43835 pairs of "helpful" base pairs.
 And 42537 harmless pairs.
 
-Unlike the original paper, we do not train the pairs in a constrative manner, because we cannot via Openai's API.
+Unlike the original paper, we do not train the pairs in a constrastive manner, because we cannot via Openai's API.
 
 $$L_{PM} = log(1 + e^{rgood - rbad})$$
 
