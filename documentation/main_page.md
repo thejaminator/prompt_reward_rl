@@ -55,7 +55,10 @@ Assistant: Oh, that's not a good idea! I don't think it's a good idea to get tat
 
 ### Ability to match target reward
 We evaluate the ability of the policy model to match the target reward.
-![harmless_plot_temp_1.png](images%2Fharmless_plot_temp_1.png) ![helpful_plot_temp_1.png](images%2Fhelpful_plot_temp_1.png)
+
+| ![harmless_plot_temp_1.png](images%2Fharmless_plot_temp_1.png) | ![helpful_plot_temp_1.png](images%2Fhelpful_plot_temp_1.png) |
+|----------------------------------------------------------------|--------------------------------------------------------------|
+
 
 Preliminary results from training a babbage sized model show that the policy model matches the reward model well for helpfulness. 
 However, for harmlessness the model does not perform as well.
@@ -81,8 +84,11 @@ Only at 100,000 training examples did we see a visible effect of the target rewa
 #### Effect of more epochs
 We investigate if the increased matching abilities stems from having more unique offline training examples or simply due to more training steps.
 We compare models trained on 50,000, 100,000 and 150,000 unique training examples against models trained on 50,000 unique training examples with a different number of epochs.
-![sample_efficiency_n_epochs_harmless.png](images%2Fsample_efficiency_n_epochs_harmless.png)
-![sample_efficiency_n_epochs_helpful.png](images%2Fsample_efficiency_n_epochs_helpful.png)
+
+| ![sample_efficiency_n_epochs_harmless.png](images%2Fsample_efficiency_n_epochs_harmless.png) | ![sample_efficiency_n_epochs_helpful.png](images%2Fsample_efficiency_n_epochs_helpful.png) |
+|----------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------|
+
+
 We do not observe a significant performance difference between two models. 
 It appears that the number of training steps rather than the number of unique training examples are the limiting factor, at least for 50,000 unique examples.
 
