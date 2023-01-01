@@ -1,24 +1,18 @@
-# Aligning Language Models by putting the reward in the prompt
-cite: Decision transformers, Inverse RL schmidhuber, Online Decision Transformer
-## Tweak desired reward post training
-Often our reward signal is a mix of many factors.
-For example, it could be reward = 2 * helpfulness + 3 * harmlessless
+#### Does duplicating the reward tokens in the prompt help?
+Our preliminary results show that it does not help.
+TODO: Plot graph
+#### Does the location of the reward tokens in the prompt matter?
+Our preliminary results that putting the reward tokens at the bottom of the prompt helps the model match the target reward better.
+TODO: Plot graph
 
-In "normal" RL, we would have to train a separate policy whenever we want to change the reward function.
+#### Compare vs normal model trained with the same number of steps / tokens. To account for the fact that maybe the increased reward comes from lower entropy. 
+#### Compare vs a model on pure chosen examples. Probably won't be better. But in real life you probably don't have so much human labelled examples. The upside of having a reward model is that you can keep having assigned rewards to new examples. Rather than continuing to pay for human labels. Also maybe have to control for temperature here. Since the entropy of the model affects the reward, and now the two models have been trained for different amount of tokens.
 
-In contrast, we can tweak the reward function after training by simply changing the prompt.
-Also possible that deploying a different target reward leads to different completion by the policy. More diverse responses for the training feedback loop.
-## Accessibility and stability of RLHF
-Current RLHF methods for LLMs are less accessible to those without compute resources to train these LLMs directly
+###
+Policy and reward model prompt loss?
 
-Openai does have fine-tuning API for LLMs
-
-However, it is limited in what you can do. Cannot run PPO on it
-
-## Exploring safety concerns related to reinforcement learning on language models
-Some people online say that we may want to restrict RL finetuning (citation needed). For example, currently there is no official API for RL finetuning on GPT-3. This is because it is not clear what the safety implications are of RL finetuning on GPT-3.
-If putting the reward in the prompt works, then does it mean that this restriction doesn't really matter?
-If we think that we should still restrict RL, then we should think about how we can even restrict this inverse RL method in the first place?
+#### Cost breakdown
+Could be useful for other researchers
 
 # Outline
 - Reward model

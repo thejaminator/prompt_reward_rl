@@ -407,7 +407,7 @@ def get_openai_model_from_neptune(
 
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
-    run_id = "OF-12"
+    run_id = "OF-15"
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
@@ -422,8 +422,8 @@ if __name__ == "__main__":
     )
     helpful_model = ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46")
     harmless_model = ModelId("babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12")
-    policy_formatter = DuplicateRewardAtBottomFormatter()
-    number_samples = 500
+    policy_formatter = RewardAtBottomFormatter()
+    number_samples = 200
     rollouts_per_prompts = 1
     evaluations: Slist[HelpfulHarmlessEvaluation] = run_evaluation(
         sample_prompts=number_samples,

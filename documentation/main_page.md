@@ -87,19 +87,20 @@ Both the correlations for harmless and helpful between the models are similar.
 It appears to be due to the number of training steps rather than the number of unique training examples at this point of time.
 
 ## Reward model details
-We utilise [Anthropic's](https://github.com/anthropics/hh-rlhf) helpful and harmless datase to train the reward models.
+We utilise [Anthropic's](https://github.com/anthropics/hh-rlhf) helpful and harmless dataset to train the reward models.
 The dataset consists of pairs where human labellers choose the more helpful or harmless dialogue.
-Each pair consists of one "good" and one "bad" example.
-| Dataset       | Pairs | Samples   |
-|---------------|-------|-----------|
-| harmless-base | Title | 5         |
-| helpful-base  | Text  | 5         |
+Each pair consists of one "good" and one "bad" dialogue.
 
-The original paper trains the pairs in a constrastive manner, minimizing the following.
+| Dataset       | Pairs | Dialogues |
+|---------------|-------|-----------|
+| harmless-base | 42537 | 85074     |
+| helpful-base  | 43835 | 87670     |
+
+The [original paper](https://arxiv.org/abs/2112.00861) trains the pairs in a constrastive manner, minimizing the following.
 $$L_{PM} = log(1 + e^{rgood - rbad})$$
 
 While we technically can train the reward models in a similar manner, we wanted to experiment with a pure OpenAI api approach.
-Instead, we train on the dataset using the LM loss to predict the classification token, "good" or "bad".
+We train on the dataset using the standard autoregressive loss to predict the classification token, "good" or "bad".
 We train each reward model on all the samples in the dataset for 1 epoch.
 
 ### Reward model prompt
@@ -125,22 +126,85 @@ During inference, we examine at the probability of the completion token being 1 
 the probability of the token being 1. We then use this probability as the reward for the prompt.
 
 ### Reward model evaluation
-During reward model accuracy evaluation, we conduct inference on the chosen and rejected prompts in the test dataset.
-If the chosen prompt has a higher probability of being 1 than the rejected prompt, we consider the result as correct.
+During reward model accuracy evaluation, we conduct inference on the chosen and rejected dialogues in the test dataset.
+If the chosen dialogue has a higher probability for the good token than the rejected dialogues, we consider the "top choice" as accurate.
+
+| Dataset       | Model size | Top Choice Accuracy |
+|---------------|------------|---------------------|
+| harmless-base | babbage    | 0.717               |
+| helpful-base  | babbage    | 0.721               |
 
 
 
 ## Work in progress
+See [here](documentation/work_in_progress.md) for a list of work in progress.
 
-#### Does duplicating the reward tokens in the prompt help?
-Our preliminary results show that it does not help.
-TODO: Plot graph
-#### Does the location of the reward tokens in the prompt matter?
-Our preliminary results that putting the reward tokens at the bottom of the prompt helps the model match the target reward better.
-TODO: Plot graph
+## Cost
+This section may be useful for those who want to replicate the experiment on OpenAI's API.
+The [finetuning API](https://beta.openai.com/docs/guides/fine-tuning) charges per token. 
+At the time of writing on 1 Jan 2023, the cost follows
 
-#### Compare vs normal model trained with the same number of steps / tokens. To account for the fact that maybe the increased reward comes from lower entropy. 
-#### Compare vs a model on pure chosen examples. Probably won't be better. But in real life you probably don't have so much human labelled examples. The upside of having a reward model is that you can keep having assigned rewards to new examples. Rather than continuing to pay for human labels. Also maybe have to control for temperature here. Since the entropy of the model affects the reward, and now the two models have been trained for different amount of tokens.
 
-#### Cost breakdown
-Could be useful for other researchers
+| Model size | Training cost per 1,000 tokens | Inference cost per 1,000 tokens |
+|------------|--------------------------------|---------------------------------|
+| ada        | $0.0004                        | $0.0016                         | 
+| babbage    | $0.0006                        | $0.0024                         |
+| curie      | $0.0030                        | $0.0120                         |
+| davinci    | $0.0300                        | $0.1200                         |
+
+
+
+### Reward Model
+We train two separate reward models, one for helpfulness and one for harmlessness.
+We train both for 1 epoch each.
+
+| Dataset       | Model   | Training dialogues | Tokens     | USD   |
+|---------------|---------|--------------------|------------|-------|
+| harmless-base | babbage | 85074              | 14,174,817 | 8.50  |
+| helpful-base  | babbage | 87670              | 16,684,632 | 10.01 |
+
+To evaluate the reward models, we used 1000 dialogue pairs (2000 dialogues) from the test set.
+
+| Dataset       | Model   | Evaluation dialogues | Tokens  | USD  |
+|---------------|---------|----------------------|---------|------|
+| harmless-base | babbage | 2000                 | 373,370 | 0.80 |
+| helpful-base  | babbage | 2000                 | 373,370 | 0.80 |
+
+To create offline training data for the policy model, we used the reward models to calculate the reward for each dialogue in training sets.
+
+| Dataset       | Model   | Offline data dialogues | USD   |
+|---------------|---------|------------------------|-------|
+| harmless-base | babbage | 75,000                 | 30.00 |
+| helpful-base  | babbage | 75,000                 | 30.00 |
+
+Note that it is technically possible to train a model using OpenAI's api to output both harmless and helpful rewards in one inference call.
+This can be done by training a model to output two classification tokens, "good" and "bad" for both harmless and helpful.
+Even with two separate datasets that only have harmless and helpful labels, we can still train a model to output two classification tokens.
+We would "mask" the first classification label when training on the second dataset by setting the loss of the first classification token to 0.
+We would put the dialogue and a random / <MASKED> classification label in the prompt, and set prompt loss weight in the API to 0.
+This would halve the cost to create offline training data.
+
+However, we did not do this in order to keep the experiment simpler.
+
+### Policy model
+We mix the harmless and helpful offline training data to train the policy model.
+
+To train a single "sweep" of the policy model for a hyperparameter, we use 150,000 offline data dialogues.
+Note that sometimes the hyperparameter involves changing the prompt. These would change the token count. Therefore, these are only approximate numbers.
+ 
+| Model   | Offline data dialogues | Tokens     | USD per sweep |
+|---------|------------------------|------------|---------------|
+| babbage | 150,000                | 29,962,000 | 18.00         |
+
+
+To evaluate the policy models, we use 500 prompts from the test set and use the policy model to complete the dialogue.
+We then use the two reward models to calculate the reward for each dialogue. Since each completion will differ in token length, these are approximate numbers.
+
+| Model                   | Evaluation dialogues | USD  |
+|-------------------------|----------------------|------|
+| babbage-policy          | 500                  | 0.28 |
+| babbage-harmless-reward | 500                  | 0.20 |
+| babbage-helpful-reward  | 500                  | 0.20 |
+
+
+These result in a total cost of ~USD 19 per hyperparameter sweep using a babbage sized model.

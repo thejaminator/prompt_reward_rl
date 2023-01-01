@@ -117,13 +117,13 @@ if __name__ == "__main__":
     policy_formatter = RewardAtBottomFormatter()
     # policy_formatter = DuplicateRewardAtBottomFormatter()
     finetune_params = FineTuneParams(
-        model="babbage",
+        model="curie",
         n_epochs=1,
         learning_rate_multiplier=0.1,
         batch_size=32,
-        prompt_loss_weight=0.0,
+        prompt_loss_weight=0.1,
     )
     # Run the main function
     # Try 1000, 10000, 25000, 50000, 75000
-    train(policy_formatter, pair_limit=50000, finetune_params=finetune_params)
+    train(policy_formatter, pair_limit=12500, finetune_params=finetune_params)
     # export PYTHONPATH=.; python train/train_offline.py
