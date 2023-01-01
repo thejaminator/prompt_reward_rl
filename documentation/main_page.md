@@ -83,8 +83,10 @@ We investigate if the increased matching abilities stems from having more unique
 We compare models trained on 50,000, 100,000 and 150,000 unique training examples against models trained on 50,000 unique training examples with a different number of epochs.
 ![sample_efficiency_n_epochs_harmless.png](images%2Fsample_efficiency_n_epochs_harmless.png)
 ![sample_efficiency_n_epochs_helpful.png](images%2Fsample_efficiency_n_epochs_helpful.png)
-Both the correlations for harmless and helpful between the models are similar.
-It appears to be due to the number of training steps rather than the number of unique training examples at this point of time.
+We do not observe a significant performance difference between two models. 
+It appears that the number of training steps rather than the number of unique training examples are the limiting factor, at least for 50,000 unique examples.
+
+We also experimented with changing the learning rate from the original 0.1 to 0.05 and 0.2. This did not appear to help.
 
 ## Reward model details
 We utilise [Anthropic's](https://github.com/anthropics/hh-rlhf) helpful and harmless dataset to train the reward models.
