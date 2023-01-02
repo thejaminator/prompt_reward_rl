@@ -1,4 +1,5 @@
 import pathlib
+from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Sequence
@@ -8,7 +9,13 @@ import pandas
 from neptune.new.metadata_containers import Run
 from openai.validators import get_common_xfix
 
-from api.openai_fine_tune import ModelId, FineTuneParams, fine_tune_result, await_fine_tune_finish, fine_tune
+from api.openai_fine_tune import (
+    ModelId,
+    FineTuneParams,
+    fine_tune_result,
+    await_fine_tune_finish,
+    fine_tune,
+)
 from api.set_key import set_openai_key
 from settings import NEPTUNE_KEY, DEFAULT_OPENAI_KEY, MODEL_ID_NEPTUNE_KEY
 from api.prompt_completion import PromptCompletion
@@ -39,6 +46,30 @@ NeptunePostTrainRunCallable = Callable[[ModelId, Run], None]
 NeptunePostTrainDoNothing: NeptunePostTrainRunCallable = lambda x, y: None
 
 
+class ShouldContinueHandler(ABC):
+    @abstractmethod
+    def should_continue(self, training_data_path: Path) -> bool:
+        raise NotImplementedError()
+
+
+class DefaultCLIHandler(ShouldContinueHandler):
+    def should_continue(self, training_data_path: Path) -> bool:
+        while True:
+            user_input = input(
+                f"Wrote training data to {training_data_path}. Please check if the data is valid. Input 'continue' to continue. Abort with 'abort'\n"
+            )
+            if user_input == "continue":
+                return True
+            elif user_input == "abort":
+                return False
+            else:
+                print("Got invalid input")
+
+
+class AlwaysContinueHandler(ShouldContinueHandler):
+    def should_continue(self, training_data_path: Path) -> bool:
+        return True
+
 def logged_fine_tune(
     train: Sequence[PromptCompletion],
     params: FineTuneParams,
@@ -50,6 +81,7 @@ def logged_fine_tune(
     neptune_pretrain_callable: NeptuneRunCallable = NeptuneDoNothing,
     # To log more neptune info after finetune
     neptune_post_train_callable: NeptunePostTrainRunCallable = NeptunePostTrainDoNothing,  # To log more neptune info
+    should_continue_handler: ShouldContinueHandler = DefaultCLIHandler(),
 ) -> ModelId:
     set_openai_key(openai_key)
     # Take and train from a sample of the dataset
@@ -79,17 +111,9 @@ def logged_fine_tune(
             "WARNING: No common prompt suffix found, this will likely cause problems!"
         )
 
-    should_continue = False
-    while should_continue is not True:
-        user_input = input(
-            f"Wrote training data to {file_path}. Please check if the data is valid. Input 'continue' to continue. Abort with 'abort'\n"
-        )
-        if user_input == "continue":
-            should_continue = True
-        elif user_input == "abort":
-            raise RuntimeError("Aborted fine tuning")
-        else:
-            print("Got invalid input")
+    should_continue_handled = should_continue_handler.should_continue(file_path)
+    if should_continue_handled is False:
+        raise RuntimeError("Aborted finetune")
 
     run = neptune.new.init(
         project=f"{project_name}",

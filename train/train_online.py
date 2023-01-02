@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from typing import Sequence
 
 from neptune.new import Run
@@ -6,20 +7,19 @@ from slist import Slist
 
 from api.cli import cli_input_list
 from api.dataset_paths import anthropic_online_train_path
-from api.logged_fine_tune import logged_fine_tune
+from api.logged_fine_tune import logged_fine_tune, AlwaysContinueHandler
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
 from api.type_check import should_not_happen
-
 from evaluate.inference import OpenaiInferenceConfig, GPTFullResponse
 from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
 from settings import ONLINE_POLICY_NEPTUNE_PROJECT
+from train.assign_rewards import assign_target_reward
 from train.evaluate_offline import (
     get_policy_single_evaluation,
     HelpfulHarmlessEvaluationMetrics,
     EvaluationWithGPTResponse,
 )
-from train.assign_rewards import assign_maximum_target_reward, assign_target_reward
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
@@ -112,7 +112,11 @@ def finetune_with_neptune(
         completion_end_token=END_TOKEN,
         params=fine_tune_params,
         neptune_pretrain_callable=neptune_log,
+        should_continue_handler=AlwaysContinueHandler(),
     )
+
+
+threadpool = ThreadPoolExecutor(max_workers=20)
 
 
 def single_iteration(
@@ -129,7 +133,7 @@ def single_iteration(
     rollouts_per_prompt: int,
 ) -> ModelId:
     # Rollout and reward the prompts
-    rollouts: Slist[EvaluationWithGPTResponse] = dialogues.map(
+    rollouts: Slist[EvaluationWithGPTResponse] = dialogues.par_map(
         lambda prompt: rollout_and_evaluate(
             dialogue=prompt.chosen,
             policy_model=policy_model,
@@ -137,7 +141,8 @@ def single_iteration(
             formatter=formatter,
             helpful_model=helpful_model,
             harmless_model=harmless_model,
-        )
+        ),
+        executor=threadpool,
     )
     # Store additional metrics about the buffer of rollouts
     rollout_metrics: RolloutBufferMetrics = calculate_rollout_metrics(
@@ -145,6 +150,7 @@ def single_iteration(
         rollouts_per_prompt=rollouts_per_prompt,
         prompt_unique_sample_count=prompt_unique_sample_count,
     )
+    print(f"Rollout metrics: {rollout_metrics}")
 
     # Convert the rollout and reward to a prompt completion
     prompts_completion: Slist[PromptCompletion] = rollouts.map(
@@ -213,13 +219,13 @@ def main():
     )
     # Get the target reward
     target_reward = HelpfulHarmlessReward(helpful=0.99, harmless=0.99)
-    n_iteration: int = 0
+    n_iteration: int = 1
     prompt_sample_count = 16
     rollouts_per_prompt = 8
     all_dialogues: Slist[AnthropicRawFormat] = get_online_prompts()
     max_iterations = 10
     while True:
-        if n_iteration >= max_iterations:
+        if n_iteration > max_iterations:
             should_continue = cli_input_list(
                 options=[True, False],
                 start_text=f"Ran {max_iterations} iterations. Continue?",
@@ -228,10 +234,10 @@ def main():
                 break
             else:
                 max_iterations += 10
-
+        print(f"Starting iteration {n_iteration}")
         # Sample dialogues
         sampled_dialogues: Slist[AnthropicRawFormat] = all_dialogues.sample(
-            prompt_sample_count
+            n=prompt_sample_count, seed=policy_model.model
         )
         # extend dialogues with the desired number of rollouts per prompt
         sampled_extended_dialogues: Slist[AnthropicRawFormat] = (
@@ -263,3 +269,7 @@ def main():
         # Update the policy model
         policy_model.model = new_model_id
         print(f"Finished iteration {n_iteration}")
+
+
+if __name__ == "__main__":
+    main()
