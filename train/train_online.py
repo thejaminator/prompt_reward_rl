@@ -92,6 +92,7 @@ class RolloutBufferMetrics(BaseModel):
     average_token_entropy: float
     average_token_proba: float
     average_rollout_length: float
+    n_iteration: int
 
 
 def finetune_with_neptune(
@@ -103,7 +104,7 @@ def finetune_with_neptune(
 ) -> ModelId:
     # Fine-tune the model with the prompt completions
 
-    def neptune_log(run: Run) -> None:
+    def pre_train_log(run: Run) -> None:
         # Log the rollout metrics to neptune
         for k, v in rollout_buffer_metrics.dict().items():
             run[f"online_metrics/{k}"] = v
@@ -126,7 +127,7 @@ def finetune_with_neptune(
         completion_start_token="",
         completion_end_token=END_TOKEN,
         params=fine_tune_params,
-        neptune_pretrain_callable=neptune_log,
+        neptune_pretrain_callable=pre_train_log,
         should_continue_handler=AlwaysContinueHandler(),
     )
 
@@ -146,6 +147,7 @@ def single_iteration(
     # for logging
     prompt_unique_sample_count: int,
     rollouts_per_prompt: int,
+    n_iteration: int,
 ) -> ModelId:
     # Rollout and reward the prompts
     rollouts: Slist[EvaluationWithGPTResponse] = dialogues.par_map(
@@ -164,6 +166,7 @@ def single_iteration(
         rollouts=rollouts,
         rollouts_per_prompt=rollouts_per_prompt,
         prompt_unique_sample_count=prompt_unique_sample_count,
+        n_iteration=n_iteration,
     )
     print(f"Rollout metrics: {rollout_buffer_metrics}")
 
@@ -188,6 +191,7 @@ def calculate_rollout_metrics(
     # for logging
     prompt_unique_sample_count: int,
     rollouts_per_prompt: int,
+    n_iteration: int,
 ) -> RolloutBufferMetrics:
     rollout_count: int = len(rollouts)
     metrics: Slist[HelpfulHarmlessEvaluationMetrics] = rollouts.map(lambda r: r.metrics)
@@ -217,6 +221,7 @@ def calculate_rollout_metrics(
         average_rollout_length=average_rollout_length,
         prompt_unique_sample_count=prompt_unique_sample_count,
         rollouts_per_prompt=rollouts_per_prompt,
+        n_iteration=n_iteration,
     )
 
 
@@ -283,6 +288,7 @@ def main():
             fine_tune_params=fine_tune_params,
             rollouts_per_prompt=rollouts_per_prompt,
             prompt_unique_sample_count=prompt_sample_count,
+            n_iteration=n_iteration,
         )
         n_iteration += 1
         # Update the policy model
