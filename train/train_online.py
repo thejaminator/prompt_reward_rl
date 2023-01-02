@@ -4,6 +4,7 @@ from neptune.new import Run
 from pydantic import BaseModel
 from slist import Slist
 
+from api.cli import cli_input_list
 from api.dataset_paths import anthropic_online_train_path
 from api.logged_fine_tune import logged_fine_tune
 from api.openai_fine_tune import ModelId, FineTuneParams
@@ -197,7 +198,18 @@ def main():
     n_iteration: int = 0
     rollout_buffer_size = 128
     all_dialogues: Slist[AnthropicRawFormat] = get_online_prompts()
+    max_iterations = 10
     while True:
+        if n_iteration >= max_iterations:
+            should_continue = cli_input_list(
+                options=[True, False],
+                start_text=f"Ran {max_iterations} iterations. Continue?",
+            )
+            if not should_continue:
+                break
+            else:
+                max_iterations += 10
+
         # Sample dialogues
         sampled_dialogues: Slist[AnthropicRawFormat] = all_dialogues.sample(
             rollout_buffer_size
