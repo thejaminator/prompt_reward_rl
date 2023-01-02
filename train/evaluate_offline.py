@@ -1,5 +1,4 @@
 import dataclasses
-import random
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 
@@ -40,6 +39,7 @@ from settings import (
     OFFLINE_POLICY_NEPTUNE_PROJECT,
     MODEL_ID_NEPTUNE_KEY,
 )
+from train.assign_rewards import assign_random_target_reward, assign_maximum_target_reward
 from train.evaluate_reward_model import (
     TestDataset,
     get_harmless_helpful_test,
@@ -50,15 +50,12 @@ from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
     RewardAtBottomFormatter,
-    RewardAtTopFormatter,
-    DuplicateRewardAtBottomFormatter,
-    NoRewardFormatter,
 )
-from train.reward_models import DialogueWithReward, HelpfulHarmlessReward
+from train.reward_models import DialogueWithReward
 from train.separators import END_TOKEN
 
 
-class HelpfulHarmlessEvaluation(BaseModel):
+class HelpfulHarmlessEvaluationMetrics(BaseModel):
     policy_prompt: str
     # prompt given to the reward model for determining the actual reward
     reward_prompt: str
@@ -70,32 +67,9 @@ class HelpfulHarmlessEvaluation(BaseModel):
     target_harmless: float
     actual_harmless: float
 
-
-def assign_random_target_reward(
-    dialogue: str, rollout_number: int
-) -> DialogueWithReward:
-    # random harmless_target 0 to 1
-    random_harmless_target = random.Random(
-        dialogue + "harmless" + str(rollout_number)
-    ).random()
-    # random helpful_target 0 to 1
-    random_helpful_target = random.Random(
-        dialogue + "helpful" + str(rollout_number)
-    ).random()
-
-    return DialogueWithReward(
-        dialogue=dialogue,
-        target_reward=HelpfulHarmlessReward(
-            helpful=random_helpful_target, harmless=random_harmless_target
-        ),
-    )
-
-
-def assign_maximum_target_reward(dialogue: str) -> DialogueWithReward:
-    return DialogueWithReward(
-        dialogue=dialogue,
-        target_reward=HelpfulHarmlessReward(helpful=1.0, harmless=1.0),
-    )
+class HelpfulHarmlessEvaluation(BaseModel):
+    metrics: HelpfulHarmlessEvaluationMetrics
+    full_response: GPTFullResponse
 
 
 @retry(exceptions=RateLimitError, tries=5, delay=20)
@@ -124,7 +98,7 @@ def get_policy_single_evaluation(
     actual_harmless_reward = get_positive_class_proba(
         harmless_model, prompt=formatted_reward_prompt
     )
-    return HelpfulHarmlessEvaluation(
+    metrics= HelpfulHarmlessEvaluationMetrics(
         policy_prompt=policy_prompt,
         reward_prompt=formatted_reward_prompt,
         completion=policy_completion.completion,
@@ -133,6 +107,10 @@ def get_policy_single_evaluation(
         actual_helpful=actual_helpful_reward,
         target_harmless=policy_prompt_info.target_reward.harmless,
         actual_harmless=actual_harmless_reward,
+    )
+    return HelpfulHarmlessEvaluation(
+        metrics=metrics,
+        full_response=policy_completion,
     )
 
 
@@ -211,8 +189,8 @@ def plot_scatterplot_and_correlation(
 
 
 class EvaluationResults(BaseModel):
-    random_target_rewards: SlistPydantic[HelpfulHarmlessEvaluation]
-    maximum_target_rewards: SlistPydantic[HelpfulHarmlessEvaluation]
+    random_target_rewards: SlistPydantic[HelpfulHarmlessEvaluationMetrics]
+    maximum_target_rewards: SlistPydantic[HelpfulHarmlessEvaluationMetrics]
 
 
 def run_evaluation(
@@ -263,14 +241,14 @@ def run_evaluation(
 
     # Rollout the prompts to get the completions, and get the actual rewards
     evaluated_random_prompts: Slist[
-        HelpfulHarmlessEvaluation
+        HelpfulHarmlessEvaluationMetrics
     ] = formatted_random_prompts.par_map(
         lambda x: get_policy_single_evaluation(
             policy_prompt_info=x,
             policy_model=policy_model,
             helpful_model=helpful_model,
             harmless_model=harmless_model,
-        ),
+        ).metrics,
         executor=threadpool,
     )
 
@@ -288,14 +266,14 @@ def run_evaluation(
         lambda x: policy_formatter.dialogue_reward_to_prompt_completion(x)
     )
     evaluated_maximum_prompts: Slist[
-        HelpfulHarmlessEvaluation
+        HelpfulHarmlessEvaluationMetrics
     ] = formatted_maximum_prompts.par_map(
         lambda x: get_policy_single_evaluation(
             policy_prompt_info=x,
             policy_model=policy_model,
             helpful_model=helpful_model,
             harmless_model=harmless_model,
-        ),
+        ).metrics,
         executor=threadpool,
     )
 
@@ -312,7 +290,7 @@ class HelpfulHarmlessScatterplots:
 
 
 def plot_random_reward_evaluations(
-    random_rewards_evaluations: Slist[HelpfulHarmlessEvaluation],
+    random_rewards_evaluations: Slist[HelpfulHarmlessEvaluationMetrics],
 ) -> HelpfulHarmlessScatterplots:
     # Calculate correlation coefficient of harmless
     target_harmless: Slist[float] = random_rewards_evaluations.map(
