@@ -1,9 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor
 from typing import Sequence
 
+import pandas as pd
 from neptune.new import Run
 from pydantic import BaseModel
 from slist import Slist
+from neptune.new.types import File
 
 from api.cli import cli_input_list
 from api.dataset_paths import anthropic_online_train_path
@@ -96,14 +98,27 @@ def finetune_with_neptune(
     prompt_completions: Sequence[PromptCompletion],
     project_name: str,
     fine_tune_params: FineTuneParams,
-    rollout_metrics: RolloutBufferMetrics,
+    rollout_buffer_metrics: RolloutBufferMetrics,
+    rollouts: Slist[HelpfulHarmlessEvaluationMetrics],
 ) -> ModelId:
     # Fine-tune the model with the prompt completions
 
     def neptune_log(run: Run) -> None:
         # Log the rollout metrics to neptune
-        for k, v in rollout_metrics.dict().items():
+        for k, v in rollout_buffer_metrics.dict().items():
             run[f"online_metrics/{k}"] = v
+
+        # write the rollouts
+        rollouts_df = pd.DataFrame(rollouts.map(lambda x: x.dict()))
+        # save the random rewards dataframe as jsonl
+        results_jsonl = rollouts_df.to_json(orient="records", lines=True)
+        # write the jsonl to a file
+        evaluation_path = "rollouts_table.jsonl"
+        with open(evaluation_path, "w") as f:
+            f.write(results_jsonl)
+        run[f"online_metrics/rollouts_table.jsonl"].upload(evaluation_path)
+        # Save as html
+        run[f"online_metrics/rollouts_table"].upload(File.as_html(rollouts_df))
 
     return logged_fine_tune(
         train=prompt_completions,
@@ -116,7 +131,7 @@ def finetune_with_neptune(
     )
 
 
-threadpool = ThreadPoolExecutor(max_workers=20)
+threadpool = ThreadPoolExecutor(max_workers=30)
 
 
 def single_iteration(
@@ -145,12 +160,12 @@ def single_iteration(
         executor=threadpool,
     )
     # Store additional metrics about the buffer of rollouts
-    rollout_metrics: RolloutBufferMetrics = calculate_rollout_metrics(
+    rollout_buffer_metrics: RolloutBufferMetrics = calculate_rollout_metrics(
         rollouts=rollouts,
         rollouts_per_prompt=rollouts_per_prompt,
         prompt_unique_sample_count=prompt_unique_sample_count,
     )
-    print(f"Rollout metrics: {rollout_metrics}")
+    print(f"Rollout metrics: {rollout_buffer_metrics}")
 
     # Convert the rollout and reward to a prompt completion
     prompts_completion: Slist[PromptCompletion] = rollouts.map(
@@ -163,7 +178,8 @@ def single_iteration(
         fine_tune_params=fine_tune_params,
         prompt_completions=prompts_completion,
         project_name=project_name,
-        rollout_metrics=rollout_metrics,
+        rollout_buffer_metrics=rollout_buffer_metrics,
+        rollouts=rollouts.map(lambda x: x.metrics),
     )
 
 
@@ -215,12 +231,15 @@ def main():
     # babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17 150k samples
     policy_model = OpenaiInferenceConfig(
         model="babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17",
+        top_p=1.0,
+        temperature=1.0,
         max_tokens=400,
+        stop=[END_TOKEN, "\n\n"],
     )
     # Get the target reward
     target_reward = HelpfulHarmlessReward(helpful=0.99, harmless=0.99)
     n_iteration: int = 1
-    prompt_sample_count = 16
+    prompt_sample_count = 32
     rollouts_per_prompt = 8
     all_dialogues: Slist[AnthropicRawFormat] = get_online_prompts()
     max_iterations = 10

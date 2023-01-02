@@ -55,17 +55,14 @@ class GPTFullResponse(BaseModel):
 
     @property
     def average_completion_prob(self) -> Optional[float]:
-        if not self.average_completion_total_log_prob:
-            return None
-        else:
-            # average_log_prob - loge(length_tokens) = log(average_prob)
-            average_log_prob: float = self.average_completion_total_log_prob
-            length_tokens: int = self.completion_tokens_length
-            # openai uses log base e
-            lhs = average_log_prob - np.log(length_tokens)
-            return np.exp(lhs)
-
-
+        completion_token_infos_log_prob: Slist[float] = self.completion_token_infos.map(
+            lambda token_info: token_info.log_prob
+        )
+        # convert them into probabilities and then average them
+        probas: Slist[float] = completion_token_infos_log_prob.map(
+            lambda log_prob: np.exp(log_prob)
+        )
+        return probas.average()
 
 
 def parse_gpt_response(
