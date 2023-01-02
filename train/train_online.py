@@ -83,6 +83,8 @@ def evaluated_rollout_to_prompt_completion(
 
 class RolloutBufferMetrics(BaseModel):
     rollout_count: int
+    prompt_unique_sample_count: int
+    rollouts_per_prompt: int
     average_harmless_reward: float
     average_helpful_reward: float
     average_token_entropy: float
@@ -122,6 +124,9 @@ def single_iteration(
     harmless_model: ModelId,
     project_name: str,
     fine_tune_params: FineTuneParams,
+    # for logging
+    prompt_unique_sample_count: int,
+    rollouts_per_prompt: int,
 ) -> ModelId:
     # Rollout and reward the prompts
     rollouts: Slist[EvaluationWithGPTResponse] = dialogues.map(
@@ -135,7 +140,11 @@ def single_iteration(
         )
     )
     # Store additional metrics about the buffer of rollouts
-    rollout_metrics: RolloutBufferMetrics = calculate_rollout_metrics(rollouts=rollouts)
+    rollout_metrics: RolloutBufferMetrics = calculate_rollout_metrics(
+        rollouts=rollouts,
+        rollouts_per_prompt=rollouts_per_prompt,
+        prompt_unique_sample_count=prompt_unique_sample_count,
+    )
 
     # Convert the rollout and reward to a prompt completion
     prompts_completion: Slist[PromptCompletion] = rollouts.map(
@@ -154,6 +163,9 @@ def single_iteration(
 
 def calculate_rollout_metrics(
     rollouts: Slist[EvaluationWithGPTResponse],
+    # for logging
+    prompt_unique_sample_count: int,
+    rollouts_per_prompt: int,
 ) -> RolloutBufferMetrics:
     rollout_count: int = len(rollouts)
     metrics: Slist[HelpfulHarmlessEvaluationMetrics] = rollouts.map(lambda r: r.metrics)
@@ -181,6 +193,8 @@ def calculate_rollout_metrics(
         average_token_entropy=average_token_entropy,
         average_token_proba=average_token_proba,
         average_rollout_length=average_rollout_length,
+        prompt_unique_sample_count=prompt_unique_sample_count,
+        rollouts_per_prompt=rollouts_per_prompt,
     )
 
 
@@ -192,11 +206,16 @@ def main():
     harmless_model = ModelId("babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12")
 
     # Starting policy model
-    policy_model = OpenaiInferenceConfig(model="babbage", max_tokens=400)
+    # babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17 150k samples
+    policy_model = OpenaiInferenceConfig(
+        model="babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17",
+        max_tokens=400,
+    )
     # Get the target reward
     target_reward = HelpfulHarmlessReward(helpful=0.99, harmless=0.99)
     n_iteration: int = 0
-    rollout_buffer_size = 128
+    prompt_sample_count = 16
+    rollouts_per_prompt = 8
     all_dialogues: Slist[AnthropicRawFormat] = get_online_prompts()
     max_iterations = 10
     while True:
@@ -212,7 +231,11 @@ def main():
 
         # Sample dialogues
         sampled_dialogues: Slist[AnthropicRawFormat] = all_dialogues.sample(
-            rollout_buffer_size
+            prompt_sample_count
+        )
+        # extend dialogues with the desired number of rollouts per prompt
+        sampled_extended_dialogues: Slist[AnthropicRawFormat] = (
+            sampled_dialogues * rollouts_per_prompt
         )
         # Params for the fine-tuning
         fine_tune_params = FineTuneParams(
@@ -225,7 +248,7 @@ def main():
         )
         # Single iteration
         new_model_id = single_iteration(
-            dialogues=sampled_dialogues,
+            dialogues=sampled_extended_dialogues,
             policy_model=policy_model,
             target_reward=target_reward,
             formatter=formatter,
@@ -233,6 +256,8 @@ def main():
             harmless_model=harmless_model,
             project_name=online_project_name,
             fine_tune_params=fine_tune_params,
+            rollouts_per_prompt=rollouts_per_prompt,
+            prompt_unique_sample_count=prompt_sample_count,
         )
         n_iteration += 1
         # Update the policy model

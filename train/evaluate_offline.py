@@ -80,6 +80,7 @@ def get_policy_single_evaluation(
     harmless_model: ModelId,
 ) -> EvaluationWithGPTResponse:
     policy_prompt = policy_prompt_info.to_prompt_completion().prompt
+    # rollout the policy
     policy_completion: GPTFullResponse = cached_get_openai_completion(
         prompt=policy_prompt_info.to_prompt_completion().prompt, config=policy_model
     )
