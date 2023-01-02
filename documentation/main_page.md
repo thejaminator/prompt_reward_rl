@@ -81,6 +81,7 @@ Only at 100,000 training examples did we see a visible effect of the target rewa
 \* In the future, we would like to compare this with larger model sizes - curie and davinci.
 \* TODO: Control for temperature since the better performance can simply be a result of the model having a lower entropy. Sweep for different temperatures and obtain the best scores. 
 
+
 #### Effect of more epochs
 We investigate if the increased matching abilities stems from having more unique offline training examples or simply due to more training steps.
 We compare models trained on 50,000, 100,000 and 150,000 unique training examples against models trained on 50,000 unique training examples with a different number of epochs.
@@ -93,6 +94,14 @@ We do not observe a significant performance difference between two models.
 It appears that the number of training steps rather than the number of unique training examples are the limiting factor, at least for 50,000 unique examples.
 
 We also experimented with changing the learning rate from the original 0.1 to 0.05 and 0.2. This did not appear to help.
+
+### Average reward before and after offline training
+We investigate the average reward if we set the target rewards to their maximize value of 1.
+
+One possible criticism of offline training is that since we collected data for our reward model, we could also have used that dataset for regular fine tuning.
+We compare it with a model where we take simply finetune on the chosen response of the labeller.
+Note that since we still evaluate on the reward model rather than an actual human, this is not a fair comparison in terms of whether it is more effective in practice. We are inteerested instead in whether we could have better optimization of the reward through regular finetuning.
+
 
 ## Reward model details
 We utilise [Anthropic's](https://github.com/anthropics/hh-rlhf) helpful and harmless dataset to train the reward models.
@@ -206,13 +215,15 @@ Note that sometimes the hyperparameter involves changing the prompt. These would
 
 
 To evaluate the policy models, we use 500 prompts from the test set and use the policy model to complete the dialogue.
+We evaluate using 500 dialogues. For each dialogue, we randomly generate target rewards to evaluate the matching ability.
+We also create use the same prompt and set the target rewards to the maximum reward. As such one dialogue results in two completions.
 We then use the two reward models to calculate the reward for each dialogue. Since each completion will differ in token length, these are approximate numbers.
 
-| Model                   | Evaluation dialogues | USD  |
-|-------------------------|----------------------|------|
-| babbage-policy          | 500                  | 0.28 |
-| babbage-harmless-reward | 500                  | 0.20 |
-| babbage-helpful-reward  | 500                  | 0.20 |
+| Model                   | Evaluation dialogues | Completions | USD  |
+|-------------------------|----------------------|:------------|------|
+| babbage-policy          | 500                  | 1000        | 0.56 |
+| babbage-harmless-reward | 500                  | 1000        | 0.56 |
+| babbage-helpful-reward  | 500                  | 1000        | 0.56 |
 
 
-These result in a total cost of ~USD 19 per hyperparameter sweep using a babbage sized model.
+These result in a total cost of ~USD 20 per hyperparameter sweep using a babbage sized model.

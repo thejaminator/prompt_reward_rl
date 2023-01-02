@@ -1,7 +1,7 @@
 import dataclasses
 import random
 from concurrent.futures import ThreadPoolExecutor
-from typing import List
+from typing import List, Optional
 
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -19,6 +19,7 @@ from retry import retry
 from scipy.stats import pearsonr, _result_classes
 from scipy.stats._common import ConfidenceInterval
 from slist import Slist
+from slist.pydantic_compat import SlistPydantic
 
 from api.openai_fine_tune import ModelId
 from api.set_key import set_openai_key
@@ -48,7 +49,10 @@ from train.evaluate_reward_model import (
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
-    RewardAtBottomFormatter, RewardAtTopFormatter, DuplicateRewardAtBottomFormatter,
+    RewardAtBottomFormatter,
+    RewardAtTopFormatter,
+    DuplicateRewardAtBottomFormatter,
+    NoRewardFormatter,
 )
 from train.reward_models import DialogueWithReward, HelpfulHarmlessReward
 from train.separators import END_TOKEN
@@ -56,6 +60,7 @@ from train.separators import END_TOKEN
 
 class HelpfulHarmlessEvaluation(BaseModel):
     policy_prompt: str
+    # prompt given to the reward model for determining the actual reward
     reward_prompt: str
     completion: str
     # Prompt + completion, without the reward
@@ -83,6 +88,13 @@ def assign_random_target_reward(
         target_reward=HelpfulHarmlessReward(
             helpful=random_helpful_target, harmless=random_harmless_target
         ),
+    )
+
+
+def assign_maximum_target_reward(dialogue: str) -> DialogueWithReward:
+    return DialogueWithReward(
+        dialogue=dialogue,
+        target_reward=HelpfulHarmlessReward(helpful=1.0, harmless=1.0),
     )
 
 
@@ -198,6 +210,11 @@ def plot_scatterplot_and_correlation(
     )
 
 
+class EvaluationResults(BaseModel):
+    random_target_rewards: SlistPydantic[HelpfulHarmlessEvaluation]
+    maximum_target_rewards: SlistPydantic[HelpfulHarmlessEvaluation]
+
+
 def run_evaluation(
     sample_prompts: int,
     policy_model: OpenaiInferenceConfig,
@@ -207,7 +224,7 @@ def run_evaluation(
     test_dataset: TestDataset,
     rollouts_per_prompt: int,
     policy_formatter: PolicyPromptFormatter,
-) -> Slist[HelpfulHarmlessEvaluation]:
+) -> EvaluationResults:
     threadpool = ThreadPoolExecutor(max_workers=20)
     set_openai_key(openai_api_key)
     seed = "999"
@@ -222,13 +239,14 @@ def run_evaluation(
         )
     )
     sample: Slist[AnthropicRawFormat] = all_test.shuffle(seed=seed).take(sample_prompts)
-    # We are just chosen to use the dialogue before the completion
+    # We are just using `chosen` to use the dialogue before the completion
     # so we can just take the .chosen which will be the same as .rejected
     sample_dialogue: Slist[str] = sample.map(lambda raw: raw.chosen)
     sample_dialogue_upscaled: Slist[TextWithRolloutNumber] = sample_dialogue.map(
         lambda x: extend_with_rollout_number(text=x, rollouts=rollouts_per_prompt)
     ).flatten_list()
-    sample_dialogue_with_target_rewards: Slist[
+    # We want to see the performance correlation with a random target reward
+    sample_dialogue_with_random_rewards: Slist[
         DialogueWithReward
     ] = sample_dialogue_upscaled.map(
         lambda text_with_rollout: assign_random_target_reward(
@@ -237,13 +255,16 @@ def run_evaluation(
         )
     )
     # Use policy_formatter to format the prompts
-    formatted_prompts: Slist[
+    formatted_random_prompts: Slist[
         PolicyPromptInfo
-    ] = sample_dialogue_with_target_rewards.map(
+    ] = sample_dialogue_with_random_rewards.map(
         lambda x: policy_formatter.dialogue_reward_to_prompt_completion(x)
     )
+
     # Rollout the prompts to get the completions, and get the actual rewards
-    evaluations: Slist[HelpfulHarmlessEvaluation] = formatted_prompts.par_map(
+    evaluated_random_prompts: Slist[
+        HelpfulHarmlessEvaluation
+    ] = formatted_random_prompts.par_map(
         lambda x: get_policy_single_evaluation(
             policy_prompt_info=x,
             policy_model=policy_model,
@@ -252,7 +273,36 @@ def run_evaluation(
         ),
         executor=threadpool,
     )
-    return evaluations
+
+    # do the same thing, but using the maximum target reward
+    sample_dialogue_with_maximum_rewards: Slist[
+        DialogueWithReward
+    ] = sample_dialogue_upscaled.map(
+        lambda text_with_rollout: assign_maximum_target_reward(
+            dialogue=text_with_rollout.text
+        )
+    )
+    formatted_maximum_prompts: Slist[
+        PolicyPromptInfo
+    ] = sample_dialogue_with_maximum_rewards.map(
+        lambda x: policy_formatter.dialogue_reward_to_prompt_completion(x)
+    )
+    evaluated_maximum_prompts: Slist[
+        HelpfulHarmlessEvaluation
+    ] = formatted_maximum_prompts.par_map(
+        lambda x: get_policy_single_evaluation(
+            policy_prompt_info=x,
+            policy_model=policy_model,
+            helpful_model=helpful_model,
+            harmless_model=harmless_model,
+        ),
+        executor=threadpool,
+    )
+
+    return EvaluationResults(
+        random_target_rewards=evaluated_random_prompts,
+        maximum_target_rewards=evaluated_maximum_prompts,
+    )
 
 
 @dataclasses.dataclass
@@ -261,15 +311,23 @@ class HelpfulHarmlessScatterplots:
     harmless: ScatterplotResults
 
 
-def plot_and_save_evaluations(
-    evaluations: Slist[HelpfulHarmlessEvaluation],
+def plot_random_reward_evaluations(
+    random_rewards_evaluations: Slist[HelpfulHarmlessEvaluation],
 ) -> HelpfulHarmlessScatterplots:
     # Calculate correlation coefficient of harmless
-    target_harmless: Slist[float] = evaluations.map(lambda x: x.target_harmless)
-    actual_harmless: Slist[float] = evaluations.map(lambda x: x.actual_harmless)
+    target_harmless: Slist[float] = random_rewards_evaluations.map(
+        lambda x: x.target_harmless
+    )
+    actual_harmless: Slist[float] = random_rewards_evaluations.map(
+        lambda x: x.actual_harmless
+    )
 
-    target_helpful: Slist[float] = evaluations.map(lambda x: x.target_helpful)
-    actual_helpful: Slist[float] = evaluations.map(lambda x: x.actual_helpful)
+    target_helpful: Slist[float] = random_rewards_evaluations.map(
+        lambda x: x.target_helpful
+    )
+    actual_helpful: Slist[float] = random_rewards_evaluations.map(
+        lambda x: x.actual_helpful
+    )
 
     harmless_results: ScatterplotResults = plot_scatterplot_and_correlation(
         x=actual_harmless,
@@ -291,7 +349,7 @@ def plot_and_save_evaluations(
     )
 
 
-def log_scatter_plots_to_neptune(
+def log_results_to_neptune(
     scatter_plots: HelpfulHarmlessScatterplots,
     neptune_api_key: str,
     neptune_project_name: str,
@@ -300,9 +358,9 @@ def log_scatter_plots_to_neptune(
     helpful_model: ModelId,
     harmless_model: ModelId,
     formatter: PolicyPromptFormatter,
-    results_dataframe: pd.DataFrame,
     number_samples: int,
     rollouts_per_sample: int,
+    results: EvaluationResults,
 ) -> None:
     temperature = policy_config.temperature
     # add the temperature to the evaluation_key
@@ -313,6 +371,28 @@ def log_scatter_plots_to_neptune(
     # Print the results
     print(f"Correlation of Harmless: {harmless_results.correlation}")
     print(f"Correlation of Helpful: {helpful_results.correlation}")
+
+    # Calculate the average reward when using the maximum target reward
+    average_helpless_reward: Optional[float] = results.maximum_target_rewards.map(
+        lambda x: x.actual_harmless
+    ).average()
+    average_helpful_reward: Optional[float] = results.maximum_target_rewards.map(
+        lambda x: x.actual_helpful
+    ).average()
+    # print
+    print(
+        f"Average Harmless Reward for maximum target reward: {average_helpless_reward}"
+    )
+    print(f"Average Helpful Reward for maximum target reward: {average_helpful_reward}")
+
+    # convert to df
+    # write the results to dataframe
+    random_rewards_df = pd.DataFrame(
+        results.random_target_rewards.map(lambda x: x.dict())
+    )
+    maximum_target_rewards_df = pd.DataFrame(
+        results.maximum_target_rewards.map(lambda x: x.dict())
+    )
 
     # Save to neptune
     run = neptune.new.init_run(
@@ -358,20 +438,39 @@ def log_scatter_plots_to_neptune(
         run[
             f"{evaluation_key}/confidence_level_helpful"
         ] = helpful_results.confidence_level
+        # Log the average reward for maximum target reward
+        run[
+            f"{evaluation_key}/average_harmless_reward_maximum_target"
+        ] = average_helpless_reward
+        run[
+            f"{evaluation_key}/average_helpful_reward_maximum_target"
+        ] = average_helpful_reward
         # Log the plots
         run[f"{evaluation_key}/helpful_plot"].upload(helpful_results.figure)
         run[f"{evaluation_key}/harmless_plot"].upload(harmless_results.figure)
         # Save the results dataframe as html
-        run[f"{evaluation_key}/evaluation_results_html"].upload(
-            File.as_html(results_dataframe)
+        run[f"{evaluation_key}/random_rewards_html"].upload(
+            File.as_html(random_rewards_df)
         )
-        # save the results dataframe as jsonl
-        results_jsonl = results_dataframe.to_json(orient="records", lines=True)
+        # save the random rewards dataframe as jsonl
+        results_jsonl = random_rewards_df.to_json(orient="records", lines=True)
         # write the jsonl to a file
-        evaluation_path = "evaluation_results.jsonl"
+        evaluation_path = "random_rewards.jsonl"
         with open(evaluation_path, "w") as f:
             f.write(results_jsonl)
-        run[f"{evaluation_key}/evaluation_results_jsonl"].upload(evaluation_path)
+        run[f"{evaluation_key}/random_rewards_jsonl"].upload(evaluation_path)
+        # Save the maximum target rewards dataframe as html
+        run[f"{evaluation_key}/maximum_target_rewards_html"].upload(
+            File.as_html(maximum_target_rewards_df)
+        )
+        # save the maximum target rewards dataframe as jsonl
+        results_jsonl = maximum_target_rewards_df.to_json(orient="records", lines=True)
+        # write the jsonl to a file
+        evaluation_path = "maximum_target_rewards.jsonl"
+        with open(evaluation_path, "w") as f:
+            f.write(results_jsonl)
+        run[f"{evaluation_key}/maximum_target_rewards_jsonl"].upload(evaluation_path)
+
     finally:
         run.stop()
 
@@ -407,7 +506,7 @@ def get_openai_model_from_neptune(
 
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
-    run_id = "OF-15"
+    run_id = "OF-8"
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
@@ -418,14 +517,14 @@ if __name__ == "__main__":
         temperature=1.0,  # try 0.6, 1.0
         max_tokens=400,
         top_p=1.0,
-        stop=END_TOKEN,
+        stop=[END_TOKEN, "\n\n"],
     )
     helpful_model = ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46")
     harmless_model = ModelId("babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12")
     policy_formatter = RewardAtBottomFormatter()
-    number_samples = 200
+    number_samples = 500
     rollouts_per_prompts = 1
-    evaluations: Slist[HelpfulHarmlessEvaluation] = run_evaluation(
+    evaluations: EvaluationResults = run_evaluation(
         sample_prompts=number_samples,
         rollouts_per_prompt=rollouts_per_prompts,
         policy_model=policy_config,
@@ -435,15 +534,14 @@ if __name__ == "__main__":
         helpful_model=helpful_model,
         harmless_model=harmless_model,
     )
+
     # plot the results
-    scatter_plots: HelpfulHarmlessScatterplots = plot_and_save_evaluations(
-        evaluations=evaluations
+    scatter_plots: HelpfulHarmlessScatterplots = plot_random_reward_evaluations(
+        random_rewards_evaluations=evaluations.random_target_rewards
     )
-    # write the results to dataframe
-    df = pd.DataFrame(evaluations.map(lambda x: x.dict()))
-    # df.to_csv("evaluate_offline.csv", index=False)
+
     # save the results to neptune
-    log_scatter_plots_to_neptune(
+    log_results_to_neptune(
         scatter_plots=scatter_plots,
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
@@ -452,15 +550,22 @@ if __name__ == "__main__":
         helpful_model=helpful_model,
         harmless_model=harmless_model,
         formatter=policy_formatter,
-        results_dataframe=df,
         number_samples=number_samples,
         rollouts_per_sample=rollouts_per_prompts,
+        results=evaluations,
     )
+    """150k samples offline
+    Target 0.99
+    Average actual helpfulness: 0.5515753179993419
+    Average actual harmlessness: 0.4696473063947702
+    
+    Target 1.00
+    Average actual helpfulness: 0.42767436214852766
+    Average actual harmlessness: 0.5496383727934258
+    
+    """
 
-    # 1,102,676 tokens for 6122 requests (samples)
-    # 1,102,676 / 6122 * 1000 = 180,116 tokens per 1000 samples
-    # 180,116 / 1000 * 0.0024 = $0.43 per 1000 samples
-
-    # We need to run 2 reward models, and 1 policy model
-    # For babbage
-    # 0.43 * 3 = $1.29 per 1000 samples
+    """Control av. reward for vanilla babbage
+    Average actual helpfulness: 0.45239336682231596
+    Average actual harmlessness: 0.4870573758367717 
+    """
