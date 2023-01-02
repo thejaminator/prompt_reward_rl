@@ -1,18 +1,22 @@
 from typing import Sequence
 
+from neptune.new import Run
 from pydantic import BaseModel
 from slist import Slist
 
 from api.dataset_paths import anthropic_online_train_path
-from api.openai_fine_tune import ModelId
+from api.logged_fine_tune import logged_fine_tune
+from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
+from api.type_check import should_not_happen
 
 from evaluate.inference import OpenaiInferenceConfig, GPTFullResponse
 from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
+from settings import ONLINE_POLICY_NEPTUNE_PROJECT
 from train.evaluate_offline import (
     get_policy_single_evaluation,
     HelpfulHarmlessEvaluationMetrics,
-    HelpfulHarmlessEvaluation,
+    EvaluationWithGPTResponse,
 )
 from train.assign_rewards import assign_maximum_target_reward, assign_target_reward
 from train.policy_prompt_formatter import (
@@ -21,6 +25,7 @@ from train.policy_prompt_formatter import (
     RewardAtBottomFormatter,
 )
 from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
+from train.separators import END_TOKEN
 
 
 def get_online_prompts() -> Slist[AnthropicRawFormat]:
@@ -36,7 +41,7 @@ def rollout_and_evaluate(
     target_reward: HelpfulHarmlessReward,
     helpful_model: ModelId,
     harmless_model: ModelId,
-) -> HelpfulHarmlessEvaluation:
+) -> EvaluationWithGPTResponse:
     # do the same thing, but using the maximum target reward
     dialogue_with_maximum_reward: DialogueWithReward = assign_target_reward(
         dialogue=dialogue,
@@ -48,7 +53,7 @@ def rollout_and_evaluate(
     )
     # Rollout the prompt using the policy model, with the target reward
     # This also evaluates the rollout and gets the actual reward
-    rollout: HelpfulHarmlessEvaluation = get_policy_single_evaluation(
+    rollout: EvaluationWithGPTResponse = get_policy_single_evaluation(
         policy_prompt_info=formatted_maximum_reward,
         policy_model=policy_model,
         helpful_model=helpful_model,
@@ -58,7 +63,7 @@ def rollout_and_evaluate(
 
 
 def evaluated_rollout_to_prompt_completion(
-    evaluated_rollout: HelpfulHarmlessEvaluation,
+    evaluated_rollout: EvaluationWithGPTResponse,
     formatter: PolicyPromptFormatter,
 ) -> PromptCompletion:
     # Replace the policy prompt with the actual reward.
@@ -75,12 +80,36 @@ def evaluated_rollout_to_prompt_completion(
     return policy_prompt.to_prompt_completion()
 
 
-def finetune(
-    model: ModelId,
+class RolloutBufferMetrics(BaseModel):
+    rollout_count: int
+    average_harmless_reward: float
+    average_helpful_reward: float
+    average_token_entropy: float
+    average_token_proba: float
+    average_rollout_length: float
+
+
+def finetune_with_neptune(
     prompt_completions: Sequence[PromptCompletion],
+    project_name: str,
+    fine_tune_params: FineTuneParams,
+    rollout_metrics: RolloutBufferMetrics,
 ) -> ModelId:
     # Fine-tune the model with the prompt completions
-    raise NotImplementedError
+
+    def neptune_log(run: Run) -> None:
+        # Log the rollout metrics to neptune
+        for k, v in rollout_metrics.dict().items():
+            run[f"online_metrics/{k}"] = v
+
+    return logged_fine_tune(
+        train=prompt_completions,
+        project_name=project_name,
+        completion_start_token="",
+        completion_end_token=END_TOKEN,
+        params=fine_tune_params,
+        neptune_pretrain_callable=neptune_log,
+    )
 
 
 def single_iteration(
@@ -90,9 +119,11 @@ def single_iteration(
     policy_model: OpenaiInferenceConfig,
     helpful_model: ModelId,
     harmless_model: ModelId,
+    project_name: str,
+    fine_tune_params: FineTuneParams,
 ) -> ModelId:
     # Rollout and reward the prompts
-    rollouts: Slist[HelpfulHarmlessEvaluation] = dialogues.map(
+    rollouts: Slist[EvaluationWithGPTResponse] = dialogues.map(
         lambda prompt: rollout_and_evaluate(
             dialogue=prompt.chosen,
             policy_model=policy_model,
@@ -102,6 +133,9 @@ def single_iteration(
             harmless_model=harmless_model,
         )
     )
+    # Store additional metrics about the buffer of rollouts
+    rollout_metrics: RolloutBufferMetrics = calculate_rollout_metrics(rollouts=rollouts)
+
     # Convert the rollout and reward to a prompt completion
     prompts_completion: Slist[PromptCompletion] = rollouts.map(
         lambda r: evaluated_rollout_to_prompt_completion(
@@ -109,10 +143,48 @@ def single_iteration(
         )
     )
     # Fine-tune the model with the prompt completions
-    return finetune(ModelId(policy_model.model), prompts_completion)
+    return finetune_with_neptune(
+        fine_tune_params=fine_tune_params,
+        prompt_completions=prompts_completion,
+        project_name=project_name,
+        rollout_metrics=rollout_metrics,
+    )
+
+
+def calculate_rollout_metrics(
+    rollouts: Slist[EvaluationWithGPTResponse],
+) -> RolloutBufferMetrics:
+    rollout_count: int = len(rollouts)
+    metrics: Slist[HelpfulHarmlessEvaluationMetrics] = rollouts.map(lambda r: r.metrics)
+    gpt_responses: Slist[GPTFullResponse] = rollouts.map(lambda m: m.full_response)
+
+    average_harmless_reward: float = metrics.map(
+        lambda m: m.actual_harmless
+    ).average() or should_not_happen("Should not be empty")
+    average_helpful_reward: float = metrics.map(
+        lambda m: m.actual_helpful
+    ).average() or should_not_happen("Should not be empty")
+    average_rollout_length: float = gpt_responses.map(
+        lambda r: r.completion_tokens_length
+    ).average() or should_not_happen("Should not be empty")
+    average_token_entropy: float = gpt_responses.map(
+        lambda r: r.average_completion_total_log_prob or should_not_happen()
+    ).average() or should_not_happen("Should not be empty")
+    average_token_proba: float = gpt_responses.map(
+        lambda r: r.average_completion_prob or should_not_happen()
+    ).average() or should_not_happen("Should not be empty")
+    return RolloutBufferMetrics(
+        rollout_count=rollout_count,
+        average_harmless_reward=average_harmless_reward,
+        average_helpful_reward=average_helpful_reward,
+        average_token_entropy=average_token_entropy,
+        average_token_proba=average_token_proba,
+        average_rollout_length=average_rollout_length,
+    )
 
 
 def main():
+    online_project_name = ONLINE_POLICY_NEPTUNE_PROJECT
     formatter: PolicyPromptFormatter = RewardAtBottomFormatter()
     # Frozen reward models
     helpful_model = ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46")
@@ -121,7 +193,7 @@ def main():
     # Starting policy model
     policy_model = OpenaiInferenceConfig(model="babbage", max_tokens=400)
     # Get the target reward
-    target_reward = HelpfulHarmlessReward(helpful=1.00, harmless=1.00)
+    target_reward = HelpfulHarmlessReward(helpful=0.99, harmless=0.99)
     n_iteration: int = 0
     rollout_buffer_size = 128
     all_dialogues: Slist[AnthropicRawFormat] = get_online_prompts()
@@ -129,6 +201,15 @@ def main():
         # Sample dialogues
         sampled_dialogues: Slist[AnthropicRawFormat] = all_dialogues.sample(
             rollout_buffer_size
+        )
+        # Params for the fine-tuning
+        fine_tune_params = FineTuneParams(
+            model=policy_model.model,
+            n_epochs=1,
+            # Lower than 0.1 because of scheduler?
+            learning_rate_multiplier=0.025,
+            prompt_loss_weight=0.0,
+            batch_size=32,
         )
         # Single iteration
         new_model_id = single_iteration(
@@ -138,6 +219,10 @@ def main():
             formatter=formatter,
             helpful_model=helpful_model,
             harmless_model=harmless_model,
+            project_name=online_project_name,
+            fine_tune_params=fine_tune_params,
         )
         n_iteration += 1
+        # Update the policy model
+        policy_model.model = new_model_id
         print(f"Finished iteration {n_iteration}")

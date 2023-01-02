@@ -67,7 +67,7 @@ class HelpfulHarmlessEvaluationMetrics(BaseModel):
     target_harmless: float
     actual_harmless: float
 
-class HelpfulHarmlessEvaluation(BaseModel):
+class EvaluationWithGPTResponse(BaseModel):
     metrics: HelpfulHarmlessEvaluationMetrics
     full_response: GPTFullResponse
 
@@ -78,7 +78,7 @@ def get_policy_single_evaluation(
     policy_model: OpenaiInferenceConfig,
     helpful_model: ModelId,
     harmless_model: ModelId,
-) -> HelpfulHarmlessEvaluation:
+) -> EvaluationWithGPTResponse:
     policy_prompt = policy_prompt_info.to_prompt_completion().prompt
     policy_completion: GPTFullResponse = cached_get_openai_completion(
         prompt=policy_prompt_info.to_prompt_completion().prompt, config=policy_model
@@ -108,7 +108,7 @@ def get_policy_single_evaluation(
         target_harmless=policy_prompt_info.target_reward.harmless,
         actual_harmless=actual_harmless_reward,
     )
-    return HelpfulHarmlessEvaluation(
+    return EvaluationWithGPTResponse(
         metrics=metrics,
         full_response=policy_completion,
     )

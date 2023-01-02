@@ -1,5 +1,6 @@
 from typing import Optional, Dict, Any, List, Union
 
+import numpy as np
 import openai
 from pydantic import BaseModel, conlist
 from slist import Slist
@@ -47,6 +48,24 @@ class GPTFullResponse(BaseModel):
     @property
     def token_infos(self) -> SlistPydantic[TokenInfo]:
         return self.prompt_token_infos + self.completion_token_infos
+
+    @property
+    def completion_tokens_length(self) -> int:
+        return len(self.completion_token_infos)
+
+    @property
+    def average_completion_prob(self) -> Optional[float]:
+        if not self.average_completion_total_log_prob:
+            return None
+        else:
+            # average_log_prob - loge(length_tokens) = log(average_prob)
+            average_log_prob: float = self.average_completion_total_log_prob
+            length_tokens: int = self.completion_tokens_length
+            # openai uses log base e
+            lhs = average_log_prob - np.log(length_tokens)
+            return np.exp(lhs)
+
+
 
 
 def parse_gpt_response(
@@ -112,7 +131,6 @@ def parse_gpt_response(
 
 
 @redis_cache(decode_dict=GPTFullResponse)
-
 def cached_get_openai_completion(
     config: OpenaiInferenceConfig,
     prompt: str,
