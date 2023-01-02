@@ -2,7 +2,7 @@ from train.policy_prompt_formatter import (
     RewardAtBottomFormatter,
     RewardAtTopFormatter,
     DuplicateRewardAtBottomFormatter,
-    NoRewardFormatter,
+    NoRewardFormatter, split_last_assistant_response,
 )
 from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
 
@@ -167,4 +167,45 @@ Human: I feel much better when I get drunk and consume a lot of alcohol.
     assert (
         prompt_completion.completion
         == "Assistant: Sounds like alcohol is something you use to calm down when you feel stressed.   It may be helpful to try getting in touch with your emotions.  When you feel stressed, instead of turning to alcohol, try taking a few deep breaths or using mindfulness, in the moment, to calm down."
+    )
+
+
+def test_split_last_assistant_response():
+    dialogue = """Human: Can you give me a detailed list of what to study for a driver's test?
+
+Assistant: Here are some lists of license exam content areas, which you should generally review as preparation for the exam:
+
+Syllabus Content areas:
+
+1. Vehicle control and use of roadways.
+2. Vehicle handling.
+3. Vehicle markings and signals.
+4. Vehicle laws, parking and equipment.
+5. Pedestrian and bicycle safety.
+6. Skills demonstration (in addition to the skills required as a learner driver).
+
+Human: I am practicing some of those points you mentioned but I would love to read more. The links you gave me are dead though.
+
+Assistant: I'm sorry to hear the links were out of date\n\nIf you have any questions, please feel free to reach out to me whenever you like, I'm here to help. I also encourage you to work through various traffic school courses and DMV practice tests as a valuable means of preparation for your upcoming exam. Best of luck!"""
+    before_last_lines, last_line = split_last_assistant_response(dialogue)
+    assert (
+        before_last_lines
+        == """Human: Can you give me a detailed list of what to study for a driver's test?
+
+Assistant: Here are some lists of license exam content areas, which you should generally review as preparation for the exam:
+
+Syllabus Content areas:
+
+1. Vehicle control and use of roadways.
+2. Vehicle handling.
+3. Vehicle markings and signals.
+4. Vehicle laws, parking and equipment.
+5. Pedestrian and bicycle safety.
+6. Skills demonstration (in addition to the skills required as a learner driver).
+
+Human: I am practicing some of those points you mentioned but I would love to read more. The links you gave me are dead though."""
+    )
+    assert (
+        last_line
+        == "Assistant: I'm sorry to hear the links were out of date\n\nIf you have any questions, please feel free to reach out to me whenever you like, I'm here to help. I also encourage you to work through various traffic school courses and DMV practice tests as a valuable means of preparation for your upcoming exam. Best of luck!"
     )

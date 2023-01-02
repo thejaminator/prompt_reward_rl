@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
-from typing import Sequence
+from typing import Sequence, Type
 
 import pandas as pd
 from neptune.new import Run
@@ -19,7 +19,7 @@ from settings import ONLINE_POLICY_NEPTUNE_PROJECT
 from train.assign_rewards import assign_target_reward
 from train.evaluate_offline import (
     get_policy_single_evaluation,
-    HelpfulHarmlessEvaluationMetrics,
+    HelpfulHarmlessEvaluationMetric,
     EvaluationWithGPTResponse,
 )
 from train.policy_prompt_formatter import (
@@ -28,6 +28,11 @@ from train.policy_prompt_formatter import (
     RewardAtBottomFormatter,
 )
 from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
+from train.reward_normalizer import (
+    RewardNormalizer,
+    MinMaxNormalizer,
+    OnlineTrainingData,
+)
 from train.separators import END_TOKEN
 
 
@@ -61,6 +66,7 @@ def rollout_and_evaluate(
         policy_model=policy_model,
         helpful_model=helpful_model,
         harmless_model=harmless_model,
+        cached=False,  # Don't cache this since we have multiple rollouts, all with the same target temperature
     )
     return rollout
 
@@ -68,19 +74,31 @@ def rollout_and_evaluate(
 def evaluated_rollout_to_prompt_completion(
     evaluated_rollout: EvaluationWithGPTResponse,
     formatter: PolicyPromptFormatter,
-) -> PromptCompletion:
+    normalizer: RewardNormalizer,
+) -> OnlineTrainingData:
     # Replace the policy prompt with the actual reward.
     completed_dialogue: str = evaluated_rollout.metrics.completed_dialogue
+    non_normalized_reward: HelpfulHarmlessReward = HelpfulHarmlessReward(
+        helpful=evaluated_rollout.metrics.actual_helpful,
+        harmless=evaluated_rollout.metrics.actual_harmless,
+    )
+    normalized_reward: HelpfulHarmlessReward = normalizer.normalize_reward(
+        non_normalized_reward
+    )
     policy_prompt: PolicyPromptInfo = formatter.dialogue_reward_to_prompt_completion(
         with_reward=DialogueWithReward(
             dialogue=completed_dialogue,
-            target_reward=HelpfulHarmlessReward(
-                helpful=evaluated_rollout.metrics.actual_helpful,
-                harmless=evaluated_rollout.metrics.actual_harmless,
-            ),
+            target_reward=normalized_reward,
         )
     )
-    return policy_prompt.to_prompt_completion()
+    p_c = policy_prompt.to_prompt_completion()
+    return OnlineTrainingData(
+        rollout_metric=evaluated_rollout.metrics,
+        normalized_helpful=normalized_reward.helpful,
+        normalized_harmless=normalized_reward.harmless,
+        training_prompt=p_c.prompt,
+        training_completion=p_c.completion,
+    )
 
 
 class RolloutBufferMetrics(BaseModel):
@@ -95,12 +113,12 @@ class RolloutBufferMetrics(BaseModel):
     n_iteration: int
 
 
-def finetune_with_neptune(
-    prompt_completions: Sequence[PromptCompletion],
+def finetune_online_with_neptune(
     project_name: str,
     fine_tune_params: FineTuneParams,
     rollout_buffer_metrics: RolloutBufferMetrics,
-    rollouts: Slist[HelpfulHarmlessEvaluationMetrics],
+    normalizer_type: Type[RewardNormalizer],
+    online_training_data: Slist[OnlineTrainingData],
 ) -> ModelId:
     # Fine-tune the model with the prompt completions
 
@@ -110,7 +128,7 @@ def finetune_with_neptune(
             run[f"online_metrics/{k}"] = v
 
         # write the rollouts
-        rollouts_df = pd.DataFrame(rollouts.map(lambda x: x.dict()))
+        rollouts_df = pd.DataFrame(online_training_data.map(lambda x: x.to_flattened_dict()))
         # save the random rewards dataframe as jsonl
         results_jsonl = rollouts_df.to_json(orient="records", lines=True)
         # write the jsonl to a file
@@ -120,9 +138,11 @@ def finetune_with_neptune(
         run[f"online_metrics/rollouts_table.jsonl"].upload(evaluation_path)
         # Save as html
         run[f"online_metrics/rollouts_table"].upload(File.as_html(rollouts_df))
+        # normalizer name
+        run["online_metrics/normalizer_type"] = normalizer_type.name()
 
     return logged_fine_tune(
-        train=prompt_completions,
+        train=online_training_data.map(lambda x: x.to_prompt_completion()),
         project_name=project_name,
         completion_start_token="",
         completion_end_token=END_TOKEN,
@@ -144,6 +164,7 @@ def single_iteration(
     harmless_model: ModelId,
     project_name: str,
     fine_tune_params: FineTuneParams,
+    normalizer_type: Type[RewardNormalizer],
     # for logging
     prompt_unique_sample_count: int,
     rollouts_per_prompt: int,
@@ -170,19 +191,24 @@ def single_iteration(
     )
     print(f"Rollout metrics: {rollout_buffer_metrics}")
 
-    # Convert the rollout and reward to a prompt completion
-    prompts_completion: Slist[PromptCompletion] = rollouts.map(
+    # Create normalizer
+    normalizer = normalizer_type(
+        rewards=rollouts.map(lambda x: x.metrics.actual_rewards)
+    )
+
+    # Convert the rollouts to data for online training
+    online_training_data: Slist[OnlineTrainingData] = rollouts.map(
         lambda r: evaluated_rollout_to_prompt_completion(
-            evaluated_rollout=r, formatter=formatter
+            evaluated_rollout=r, formatter=formatter, normalizer=normalizer
         )
     )
     # Fine-tune the model with the prompt completions
-    return finetune_with_neptune(
+    return finetune_online_with_neptune(
         fine_tune_params=fine_tune_params,
-        prompt_completions=prompts_completion,
         project_name=project_name,
         rollout_buffer_metrics=rollout_buffer_metrics,
-        rollouts=rollouts.map(lambda x: x.metrics),
+        online_training_data=online_training_data,
+        normalizer_type=normalizer_type,
     )
 
 
@@ -194,7 +220,7 @@ def calculate_rollout_metrics(
     n_iteration: int,
 ) -> RolloutBufferMetrics:
     rollout_count: int = len(rollouts)
-    metrics: Slist[HelpfulHarmlessEvaluationMetrics] = rollouts.map(lambda r: r.metrics)
+    metrics: Slist[HelpfulHarmlessEvaluationMetric] = rollouts.map(lambda r: r.metrics)
     gpt_responses: Slist[GPTFullResponse] = rollouts.map(lambda m: m.full_response)
 
     average_harmless_reward: float = metrics.map(
@@ -243,6 +269,8 @@ def main():
     )
     # Get the target reward
     target_reward = HelpfulHarmlessReward(helpful=0.99, harmless=0.99)
+    # Parameters to tweak
+    normalizer_type = MinMaxNormalizer
     n_iteration: int = 1
     prompt_sample_count = 32
     rollouts_per_prompt = 8
@@ -272,7 +300,7 @@ def main():
             model=policy_model.model,
             n_epochs=1,
             # Lower than 0.1 because of scheduler?
-            learning_rate_multiplier=0.025,
+            learning_rate_multiplier=0.05,
             prompt_loss_weight=0.0,
             batch_size=32,
         )
@@ -289,6 +317,7 @@ def main():
             rollouts_per_prompt=rollouts_per_prompt,
             prompt_unique_sample_count=prompt_sample_count,
             n_iteration=n_iteration,
+            normalizer_type=normalizer_type,
         )
         n_iteration += 1
         # Update the policy model

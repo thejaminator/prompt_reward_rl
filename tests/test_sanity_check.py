@@ -1,4 +1,4 @@
-from evaluate.evaluate_joint_reward_model import get_harmless_helpful_test
+from train.evaluate_reward_model import get_harmless_helpful_test
 from train.train_joint_reward_model import get_harmless_helpful_train
 
 

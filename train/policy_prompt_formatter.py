@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Tuple
 
 from pydantic import BaseModel
 from slist import Slist
@@ -23,6 +24,16 @@ class PolicyPromptInfo(BaseModel):
             prompt=self.dialogue_with_reward_without_completion,
             completion=self.completion,
         )
+
+
+def split_last_assistant_response(dialogue: str) -> Tuple[str, str]:
+    # Find the index of where the last `\n\nAssistant: ` is
+    index_last_assistant_response = dialogue.rfind("\n\nAssistant: ")
+    # Split the dialogue into the lines before the last assistant response and the last assistant response
+    before_last_lines = dialogue[: index_last_assistant_response + 2]
+    last_line = dialogue[index_last_assistant_response + 2 :]
+    # strip excess whitespace
+    return before_last_lines.strip(), last_line.strip()
 
 
 class PolicyPromptFormatter(ABC):
@@ -61,10 +72,9 @@ class RewardAtBottomFormatter(PolicyPromptFormatter):
         helpful_reward_2dp: str = str(round(with_reward.target_reward.helpful, 2))
         harmless_reward_2dp: str = str(round(with_reward.target_reward.harmless, 2))
         # you need to separate the last "assistant" from the prompt
-        conversation_lines: list[str] = with_reward.dialogue.strip().split("\n\n")
-        last_line: str = conversation_lines[-1]
-        before_last_lines: list[str] = conversation_lines[:-1]
-        before_last_lines_formatted = "\n\n".join(before_last_lines)
+        before_last_lines_formatted, last_line = split_last_assistant_response(
+            with_reward.dialogue
+        )
 
         dialogue_with_reward: str = (
             before_last_lines_formatted
@@ -117,10 +127,10 @@ class DuplicateRewardAtBottomFormatter(PolicyPromptFormatter):
             .mk_string(" ")
         )
         # you need to separate the last "assistant" from the prompt
-        conversation_lines: list[str] = with_reward.dialogue.strip().split("\n\n")
-        last_line: str = conversation_lines[-1]
-        before_last_lines: list[str] = conversation_lines[:-1]
-        before_last_lines_formatted = "\n\n".join(before_last_lines)
+        # you need to separate the last "assistant" from the prompt
+        before_last_lines_formatted, last_line = split_last_assistant_response(
+            with_reward.dialogue
+        )
 
         dialogue_with_reward: str = (
             before_last_lines_formatted
@@ -166,10 +176,10 @@ class RewardAtTopFormatter(PolicyPromptFormatter):
         helpful_reward_2dp: str = str(round(with_reward.target_reward.helpful, 2))
         harmless_reward_2dp: str = str(round(with_reward.target_reward.harmless, 2))
         # you need to separate the last "assistant" from the prompt
-        conversation_lines: list[str] = with_reward.dialogue.strip().split("\n\n")
-        last_line: str = conversation_lines[-1]
-        before_last_lines: list[str] = conversation_lines[:-1]
-        before_last_lines_formatted = "\n\n".join(before_last_lines)
+        # you need to separate the last "assistant" from the prompt
+        before_last_lines_formatted, last_line = split_last_assistant_response(
+            with_reward.dialogue
+        )
 
         dialogue_with_reward: str = (
             START_REWARD_SEPARATOR
