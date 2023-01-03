@@ -15,6 +15,10 @@ from evaluate.classification import (
 )
 from parsing.parse_raw import AnthropicRawFormat
 from settings import OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT
+from train.joint_policy_prompt_formatter import (
+    JointPolicyPromptFormatter,
+    JointRewardAtBottomFormatter,
+)
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     RewardAtBottomFormatter,
@@ -46,7 +50,7 @@ def get_offline_reward(
 
 
 def train(
-    policy_formatter: PolicyPromptFormatter,
+    policy_formatter: JointPolicyPromptFormatter,
     pair_limit: int,
     finetune_params: FineTuneParams,
 ) -> ModelId:
@@ -60,7 +64,9 @@ def train(
     thread_pool = ThreadPoolExecutor(max_workers=20)
     counter = 0
 
-    def get_rewards_and_count(raw: AnthropicRawFormat) -> Slist[DialogueWithJointReward]:
+    def get_rewards_and_count(
+        raw: AnthropicRawFormat,
+    ) -> Slist[DialogueWithJointReward]:
         nonlocal counter
         counter += 1
         if counter % 200 == 0:
@@ -103,7 +109,7 @@ def train(
 
 
 if __name__ == "__main__":
-    policy_formatter = RewardAtBottomFormatter()
+    policy_formatter = JointRewardAtBottomFormatter()
     finetune_params = FineTuneParams(
         model="babbage",
         n_epochs=1,
