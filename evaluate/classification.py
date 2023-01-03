@@ -1,7 +1,7 @@
 from typing import NewType
 
 import numpy as np
-from openai.error import RateLimitError
+from openai.error import RateLimitError, APIConnectionError
 from retry import retry
 
 from api.redis_cache import redis_cache
@@ -18,7 +18,7 @@ def format_dialogue_into_reward_prompt(conversation: str) -> PromptForRewardMode
 
 
 @redis_cache()
-@retry(exceptions=RateLimitError, tries=5, delay=20)
+@retry(exceptions=(RateLimitError,APIConnectionError), tries=5, delay=20)
 def get_positive_class_proba(model_id: str, prompt: PromptForRewardModel) -> float:
     """Returns the probability of the positive class. aka reward"""
     # We just need 1 token

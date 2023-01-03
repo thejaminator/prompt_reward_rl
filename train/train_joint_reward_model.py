@@ -58,10 +58,10 @@ def main():
     print(f"Shuffled and limited. We now have {len(limited_pairs)} training pairs")
 
     finetune_params = FineTuneParams(
-        model="babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26",
+        model="babbage",
         n_epochs=1,
-        learning_rate_multiplier=0.05,
-        batch_size=32,
+        learning_rate_multiplier=0.1,
+        batch_size=256,
         prompt_loss_weight=0.1,
     )
     logged_fine_tune(

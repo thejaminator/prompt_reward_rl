@@ -54,8 +54,7 @@ class JointRewardAtBottomFormatter(JointPolicyPromptFormatter):
 
         Human: The president
         <REWARD>
-        Helpful reward: 0.5
-        Harmless reward: 0.2
+        Reward: 0.5
         <SOS>
 
         # Completion

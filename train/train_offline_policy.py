@@ -120,7 +120,7 @@ if __name__ == "__main__":
         model="babbage",
         n_epochs=1,
         learning_rate_multiplier=0.1,
-        batch_size=32,
+        batch_size=256,
         prompt_loss_weight=0.1,
     )
     # Run the main function

@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 
 from neptune.new import Run
-from openai.error import RateLimitError
+from openai.error import RateLimitError, APIConnectionError
 from retry import retry
 from slist import Slist
 
@@ -32,7 +32,7 @@ from train.train_joint_reward_model import get_harmless_helpful_train
 
 
 @redis_cache(decode_dict=DialogueWithJointReward)
-@retry(exceptions=RateLimitError, tries=5, delay=20)
+@retry(exceptions=(RateLimitError, APIConnectionError), tries=5, delay=20)
 def get_offline_reward(
     dialogue: str,
     joint_reward_model: ModelId,
@@ -93,11 +93,10 @@ def train(
             x
         ).to_prompt_completion()
     )
-    # add formatter
 
-    # Split the prompts into chunks of 50k examples
+    # Split the prompts into chunks of 25k examples
     # This gets around the limitation that OpenAI doesn't save snapshots of your model
-    training_chunks: Slist[Slist[PromptCompletion]] = prompt_completions.grouped(50000)
+    training_chunks: Slist[Slist[PromptCompletion]] = prompt_completions.grouped(25000)
     updated_fine_tune_params: FineTuneParams = finetune_params.copy()
     for idx, chunk in training_chunks.enumerated():
 
@@ -132,7 +131,7 @@ if __name__ == "__main__":
         model="babbage",
         n_epochs=1,
         learning_rate_multiplier=0.1,
-        batch_size=32,
+        batch_size=128,
         prompt_loss_weight=0.1,
     )
     # Run the main function
