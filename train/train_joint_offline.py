@@ -94,18 +94,36 @@ def train(
         ).to_prompt_completion()
     )
     # add formatter
-    def neptune_pretrain_callable(run: Run) -> None:
-        run["policy_formatter"] = policy_formatter.name
 
-    model_id = logged_fine_tune(
-        train=prompt_completions,
-        params=finetune_params,
-        project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
-        completion_start_token="",
-        completion_end_token=END_TOKEN,
-        neptune_pretrain_callable=neptune_pretrain_callable,
-    )
-    return model_id
+    # Split the prompts into chunks of 50k examples
+    # This gets around the limitation that OpenAI doesn't save snapshots of your model
+    training_chunks: Slist[Slist[PromptCompletion]] = prompt_completions.grouped(50000)
+    updated_fine_tune_params: FineTuneParams = finetune_params.copy()
+    for idx, chunk in training_chunks.enumerated():
+
+        def neptune_pretrain_callable(run: Run) -> None:
+            run["policy_formatter"] = policy_formatter.name
+            run["train/total_train_examples"] = len(prompt_completions)
+            run["train/chunk_number"] = idx + 1
+
+        # for idx greater than 0, we need to set a lower learning rate ( half )
+        if idx > 0:
+            updated_fine_tune_params.learning_rate_multiplier = (
+                finetune_params.learning_rate_multiplier / 2
+            )
+        print(f"Training chunk {idx + 1} of {len(training_chunks)}")
+        new_model_id = logged_fine_tune(
+            train=chunk,
+            params=updated_fine_tune_params,
+            project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
+            completion_start_token="",
+            completion_end_token=END_TOKEN,
+            neptune_pretrain_callable=neptune_pretrain_callable,
+        )
+        # after training, update updated_fine_tune_params
+        updated_fine_tune_params.model = new_model_id
+    # Return the final model id
+    return ModelId(updated_fine_tune_params.model)
 
 
 if __name__ == "__main__":
