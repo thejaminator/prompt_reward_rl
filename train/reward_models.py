@@ -9,3 +9,7 @@ class HelpfulHarmlessReward(BaseModel):
 class DialogueWithReward(BaseModel):
     dialogue: str
     target_reward: HelpfulHarmlessReward
+
+class DialogueWithJointReward(BaseModel):
+    dialogue: str
+    target_reward: float

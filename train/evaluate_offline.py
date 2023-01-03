@@ -12,7 +12,7 @@ from neptune.new.types import File
 
 import pandas as pd
 import seaborn as sns
-from openai.error import RateLimitError
+from openai.error import RateLimitError, APIConnectionError
 from pydantic import BaseModel
 from retry import retry
 from scipy.stats import pearsonr, _result_classes
@@ -37,7 +37,7 @@ from parsing.parse_raw import AnthropicRawFormat
 from settings import (
     OPENAI_KEY,
     NEPTUNE_KEY,
-    OFFLINE_POLICY_NEPTUNE_PROJECT,
+    OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
     MODEL_ID_NEPTUNE_KEY,
 )
 from train.assign_rewards import (
@@ -84,7 +84,7 @@ class EvaluationWithGPTResponse(BaseModel):
     full_response: GPTFullResponse
 
 
-@retry(exceptions=RateLimitError, tries=5, delay=20)
+@retry(exceptions=(RateLimitError, APIConnectionError), tries=5, delay=20)
 def get_policy_single_evaluation(
     policy_prompt_info: PolicyPromptInfo,
     policy_model: OpenaiInferenceConfig,
@@ -507,7 +507,7 @@ if __name__ == "__main__":
     run_id = "OF-8"
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
-        neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
+        neptune_project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
         neptune_run_id=run_id,
     )
     policy_config = OpenaiInferenceConfig(
@@ -515,7 +515,7 @@ if __name__ == "__main__":
         temperature=1.0,  # try 0.6, 1.0
         max_tokens=400,
         top_p=1.0,
-        stop=[END_TOKEN],
+        stop=END_TOKEN,
     )
     helpful_model = ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46")
     harmless_model = ModelId("babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12")
@@ -542,7 +542,7 @@ if __name__ == "__main__":
     log_results_to_neptune(
         scatter_plots=scatter_plots,
         neptune_api_key=NEPTUNE_KEY,
-        neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
+        neptune_project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
         neptune_run_id=run_id,
         policy_config=policy_config,
         helpful_model=helpful_model,

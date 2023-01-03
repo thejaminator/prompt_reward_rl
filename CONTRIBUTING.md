@@ -1,5 +1,5 @@
 
 # Run mypy
 ```shell
-dmypy run -- .
+dmypy run
 ```

@@ -48,7 +48,7 @@ def main(limit: int, model_id: str, openai_api_key: str, test_dataset: TestDatas
             else get_helpful_test()
         )
     )
-    sample = all_test.shuffle().take(limit)
+    sample = all_test.shuffle(seed="123").take(limit)
     # Get the predictions
     predictions = sample.map(lambda pair: get_pair_predicted_chosen(model_id, pair))
     # Calculate the accuracy
@@ -57,15 +57,17 @@ def main(limit: int, model_id: str, openai_api_key: str, test_dataset: TestDatas
 
 
 if __name__ == "__main__":
-    # Joint model on 80k samples babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26 0.67
+    # Joint model on 80k samples babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26
+    # 0.67 on joint, 0.67 on harmless, 0.6675 on helpful
+    # Two epochs did not help babbage:ft-leadiq:leadiq-assistant-reward-model-2023-01-02-20-05-37
     # Joint model on 10k pairs babbage:ft-leadiq:assistant-reward-model-2022-12-19-15-51-58 0.6
     # Helpful model on 43835 pairs babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46 0.721 on helpful
     # Harmless model on 42537 pairs babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12 0.717 on harmless
     main(
-        limit=1000,
-        model_id="babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12",
+        limit=400,
+        model_id="babbage:ft-leadiq:leadiq-assistant-reward-model-2023-01-02-20-05-37",
         openai_api_key=OPENAI_KEY,
-        test_dataset=TestDataset.HARMLESS,
+        test_dataset=TestDataset.HARMLESS_HELPFUL,
     )
 
 

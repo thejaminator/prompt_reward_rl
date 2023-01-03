@@ -261,11 +261,11 @@ def main():
     # Starting policy model
     # babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17 150k samples
     policy_model = OpenaiInferenceConfig(
-        model="babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17",
+        model="babbage:ft-leadiq:thejaminator-online-assistant-policy-2023-01-02-18-00-00",
         top_p=1.0,
         temperature=1.0,
         max_tokens=400,
-        stop=[END_TOKEN, "\n\n"],
+        stop=END_TOKEN,
     )
     # Get the target reward
     target_reward = HelpfulHarmlessReward(helpful=0.99, harmless=0.99)

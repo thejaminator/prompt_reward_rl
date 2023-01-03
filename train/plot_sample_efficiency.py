@@ -7,7 +7,7 @@ from slist import Slist
 from api.redis_cache import redis_cache
 from settings import (
     NEPTUNE_KEY,
-    OFFLINE_POLICY_NEPTUNE_PROJECT,
+    OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
     TRAIN_EXAMPLES_NEPTUNE_KEY,
 )
 from train.evaluate_offline import get_neptune_run
@@ -59,7 +59,7 @@ def plot_training_examples_sample_efficiency() -> None:
     for run_id in one_epoch_run_ids:
         metric = get_sample_efficiency_metric(
             neptune_api_key=NEPTUNE_KEY,
-            neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
+            neptune_project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
             run_id=run_id,
         )
         metrics.append(metric)
@@ -147,7 +147,7 @@ def plot_epochs_sample_efficiency() -> None:
     multiple_epoch_metrics: Slist[ModelCorrelationMetric] = multiple_epoch_run_ids.map(
         lambda run_id: get_sample_efficiency_metric(
             neptune_api_key=NEPTUNE_KEY,
-            neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
+            neptune_project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
             run_id=run_id,
         )
     )
@@ -156,7 +156,7 @@ def plot_epochs_sample_efficiency() -> None:
     ] = one_epoch_comparison_run_ids.map(
         lambda run_id: get_sample_efficiency_metric(
             neptune_api_key=NEPTUNE_KEY,
-            neptune_project_name=OFFLINE_POLICY_NEPTUNE_PROJECT,
+            neptune_project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
             run_id=run_id,
         )
     )

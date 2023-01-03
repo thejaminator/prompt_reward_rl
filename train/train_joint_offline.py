@@ -1,7 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 
 from neptune.new import Run
-from pydantic import BaseModel
+from openai.error import RateLimitError
+from retry import retry
 from slist import Slist
 
 from api.logged_fine_tune import logged_fine_tune
@@ -16,35 +17,31 @@ from parsing.parse_raw import AnthropicRawFormat
 from settings import OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
-    RewardAtBottomFormatter, RewardAtTopFormatter, DuplicateRewardAtBottomFormatter,
+    RewardAtBottomFormatter,
 )
-from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
+from train.reward_models import (
+    DialogueWithReward,
+    DialogueWithJointReward,
+)
 from train.separators import END_TOKEN
 from train.train_joint_reward_model import get_harmless_helpful_train
-from retry import retry
-from openai.error import RateLimitError
 
 
-@redis_cache(decode_dict=DialogueWithReward)
+@redis_cache(decode_dict=DialogueWithJointReward)
 @retry(exceptions=RateLimitError, tries=5, delay=20)
 def get_offline_reward(
     dialogue: str,
-    helpful_model: ModelId,
-    harmless_model: ModelId,
-) -> DialogueWithReward:
+    joint_reward_model: ModelId,
+) -> DialogueWithJointReward:
     # Get the reward for the dialogue
     formatted = format_dialogue_into_reward_prompt(dialogue)
-    helpful_reward = get_positive_class_proba(model_id=helpful_model, prompt=formatted)
-    harmless_reward = get_positive_class_proba(
-        model_id=harmless_model, prompt=formatted
+    joint_reward = get_positive_class_proba(
+        model_id=joint_reward_model, prompt=formatted
     )
     # Return the dialogue with the reward
-    return DialogueWithReward(
+    return DialogueWithJointReward(
         dialogue=dialogue,
-        target_reward=HelpfulHarmlessReward(
-            helpful=helpful_reward,
-            harmless=harmless_reward,
-        ),
+        target_reward=joint_reward,
     )
 
 
@@ -57,17 +54,13 @@ def train(
     raw_prompts: Slist[AnthropicRawFormat] = (
         get_harmless_helpful_train().shuffle(seed="999").take(pair_limit)
     )
-    # Get the helpful and harmless models
-    helpful_model: ModelId = ModelId(
-        "babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46"
-    )
-    harmless_model: ModelId = ModelId(
-        "babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12"
+    joint_model: ModelId = ModelId(
+        "babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26"
     )
     thread_pool = ThreadPoolExecutor(max_workers=20)
     counter = 0
 
-    def get_rewards_and_count(raw: AnthropicRawFormat) -> Slist[DialogueWithReward]:
+    def get_rewards_and_count(raw: AnthropicRawFormat) -> Slist[DialogueWithJointReward]:
         nonlocal counter
         counter += 1
         if counter % 200 == 0:
@@ -75,21 +68,16 @@ def train(
         return Slist(
             # Get rewards for both chosen and rejected
             [
-                get_offline_reward(
-                    dialogue=raw.chosen,
-                    helpful_model=helpful_model,
-                    harmless_model=harmless_model,
-                ),
+                get_offline_reward(dialogue=raw.chosen, joint_reward_model=joint_model),
                 get_offline_reward(
                     dialogue=raw.rejected,
-                    helpful_model=helpful_model,
-                    harmless_model=harmless_model,
+                    joint_reward_model=joint_model,
                 ),
             ]
         )
 
     # Get the rewards for the prompts
-    prompt_with_rewards: Slist[DialogueWithReward] = raw_prompts.par_map(
+    prompt_with_rewards: Slist[DialogueWithJointReward] = raw_prompts.par_map(
         get_rewards_and_count,
         executor=thread_pool,
     ).flatten_list()
@@ -102,6 +90,7 @@ def train(
     # add formatter
     def neptune_pretrain_callable(run: Run) -> None:
         run["policy_formatter"] = policy_formatter.name
+
     model_id = logged_fine_tune(
         train=prompt_completions,
         params=finetune_params,
@@ -115,7 +104,6 @@ def train(
 
 if __name__ == "__main__":
     policy_formatter = RewardAtBottomFormatter()
-    # policy_formatter = DuplicateRewardAtBottomFormatter()
     finetune_params = FineTuneParams(
         model="babbage",
         n_epochs=1,
@@ -126,4 +114,4 @@ if __name__ == "__main__":
     # Run the main function
     # Try 1000, 10000, 25000, 50000, 75000
     train(policy_formatter, pair_limit=75000, finetune_params=finetune_params)
-    # export PYTHONPATH=.; python train/train_offline.py
+    # export PYTHONPATH=.; python train/train_joint_offline.py
