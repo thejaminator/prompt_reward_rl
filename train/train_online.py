@@ -16,7 +16,7 @@ from api.type_check import should_not_happen
 from evaluate.inference import OpenaiInferenceConfig, GPTFullResponse
 from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
 from settings import ONLINE_POLICY_NEPTUNE_PROJECT
-from train.assign_rewards import assign_target_reward
+from train.assign_rewards import assign_separate_target_reward
 from train.evaluate_offline import (
     get_policy_single_evaluation,
     HelpfulHarmlessEvaluationMetric,
@@ -51,7 +51,7 @@ def rollout_and_evaluate(
     harmless_model: ModelId,
 ) -> EvaluationWithGPTResponse:
     # do the same thing, but using the maximum target reward
-    dialogue_with_maximum_reward: DialogueWithReward = assign_target_reward(
+    dialogue_with_maximum_reward: DialogueWithReward = assign_separate_target_reward(
         dialogue=dialogue,
         helpful_target=target_reward.helpful,
         harmless_target=target_reward.harmless,

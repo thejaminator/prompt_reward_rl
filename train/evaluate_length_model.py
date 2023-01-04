@@ -36,8 +36,7 @@ class TestDataset(str, Enum):
     HARMLESS_HELPFUL = "harmless_helpful"
 
 
-def main(limit: int, model_id: str, openai_api_key: str, test_dataset: TestDataset):
-    set_openai_key(openai_api_key)
+def main(limit: int, test_dataset: TestDataset):
     # Load the test datasets
     all_test = (
         get_harmless_helpful_test()
@@ -50,31 +49,15 @@ def main(limit: int, model_id: str, openai_api_key: str, test_dataset: TestDatas
     )
     sample = all_test.shuffle(seed="123").take(limit)
     # Get the predictions
-    predictions = sample.map(lambda pair: get_pair_predicted_chosen(model_id, pair))
+    predictions = sample.map(lambda pair: len(pair.chosen) >= len(pair.rejected))
     # Calculate the accuracy
     accuracy: Optional[float] = predictions.average()
-    print(f"Accuracy: {accuracy} for {model_id} on {limit} samples")
+    print(f"Accuracy: {accuracy} on {limit} samples")
 
 
 if __name__ == "__main__":
-    # Joint model on 80k samples babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26
-    # batch size 32
-    # 0.67 on joint, 0.67 on harmless, 0.6675 on helpful
-    # Two epochs did not help babbage:ft-leadiq:leadiq-assistant-reward-model-2023-01-02-20-05-37
-    # batch size 256 babbage:ft-leadiq:leadiq-assistant-reward-model-2023-01-03-14-24-13
-    # 0.6125 on joint
-
-    # Joint model on 10k pairs babbage:ft-leadiq:assistant-reward-model-2022-12-19-15-51-58 0.6
-    # Helpful model on 43835 pairs babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46 0.721 on helpful
-    # Harmless model on 42537 pairs babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12 0.717 on harmless
+    # Evaluate a strategy where we simply choose the longer one
     main(
-        limit=400,
-        model_id="babbage:ft-leadiq:leadiq-assistant-reward-model-2023-01-03-14-24-13",
-        openai_api_key=OPENAI_KEY,
-        test_dataset=TestDataset.HARMLESS_HELPFUL,
+        limit=1000,
+        test_dataset=TestDataset.HARMLESS,
     )
-
-
-    # 1,102,676 tokens for 6122 requests (samples)
-    # 1,102,676 / 6122 * 1000 = 180,116 tokens per 1000 samples
-    # 180,116 / 1000 * 0.0024 = $0.43 to evaluate 1000 samples

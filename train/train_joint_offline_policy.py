@@ -5,7 +5,7 @@ from openai.error import RateLimitError, APIConnectionError
 from retry import retry
 from slist import Slist
 
-from api.logged_fine_tune import logged_fine_tune
+from api.logged_fine_tune import logged_fine_tune, AlwaysContinueHandler
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
 from api.redis_cache import redis_cache
@@ -118,6 +118,7 @@ def train(
             completion_start_token="",
             completion_end_token=END_TOKEN,
             neptune_pretrain_callable=neptune_pretrain_callable,
+            should_continue_handler=AlwaysContinueHandler(),
         )
         # after training, update updated_fine_tune_params
         updated_fine_tune_params.model = new_model_id
@@ -131,7 +132,7 @@ if __name__ == "__main__":
         model="babbage",
         n_epochs=1,
         learning_rate_multiplier=0.1,
-        batch_size=128,
+        batch_size=32,
         prompt_loss_weight=0.1,
     )
     # Run the main function

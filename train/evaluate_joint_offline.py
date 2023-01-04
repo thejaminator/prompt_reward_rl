@@ -1,22 +1,15 @@
-import dataclasses
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional
-
-import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
+from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 import neptune
 import neptune.new
+import pandas as pd
 from neptune.new import Run
 from neptune.new.types import File
-
-import pandas as pd
-import seaborn as sns
 from openai.error import RateLimitError, APIConnectionError
 from pydantic import BaseModel
 from retry import retry
-from scipy.stats import pearsonr, _result_classes
-from scipy.stats._common import ConfidenceInterval
 from slist import Slist
 from slist.pydantic_compat import SlistPydantic
 
@@ -41,57 +34,44 @@ from settings import (
     MODEL_ID_NEPTUNE_KEY,
 )
 from train.assign_rewards import (
-    assign_random_separate_target_reward,
-    assign_maximum_separate_target_reward,
+    assign_random_joint_target_reward, assign_maximum_joint_target_reward,
 )
+from train.evaluate_offline import extend_with_rollout_number, ScatterplotResults, plot_scatterplot_and_correlation, \
+    TextWithRolloutNumber
 from train.evaluate_reward_model import (
     TestDataset,
-    get_harmless_helpful_test,
-    get_harmless_test,
-    get_helpful_test,
+    get_helpful_test, get_harmless_test, get_harmless_helpful_test,
 )
-from train.policy_prompt_formatter import (
-    PolicyPromptFormatter,
-    PolicyPromptInfo,
-    RewardAtBottomFormatter,
-)
-from train.reward_models import DialogueWithReward, HelpfulHarmlessReward
+from train.joint_policy_prompt_formatter import JointPolicyPromptInfo, JointPolicyPromptFormatter, \
+    JointRewardAtBottomFormatter
+from train.reward_models import DialogueWithJointReward
 from train.separators import END_TOKEN
 
 
-class HelpfulHarmlessEvaluationMetric(BaseModel):
+class JointEvaluationMetric(BaseModel):
     policy_prompt: str
     # prompt given to the reward model for determining the actual reward
     reward_prompt: str
     completion: str
     # Prompt + completion, without the reward
     completed_dialogue: str
-    target_helpful: float
-    actual_helpful: float
-    target_harmless: float
-    actual_harmless: float
-
-    @property
-    def actual_rewards(self) -> HelpfulHarmlessReward:
-        return HelpfulHarmlessReward(
-            helpful=self.actual_helpful,
-            harmless=self.actual_harmless,
-        )
+    target_reward: float
+    actual_reward: float
 
 
-class EvaluationWithGPTResponse(BaseModel):
-    metrics: HelpfulHarmlessEvaluationMetric
+
+class JointEvaluationWithGPTResponse(BaseModel):
+    metrics: JointEvaluationMetric
     full_response: GPTFullResponse
 
 
 @retry(exceptions=(RateLimitError, APIConnectionError), tries=5, delay=20)
 def get_policy_single_evaluation(
-    policy_prompt_info: PolicyPromptInfo,
+    policy_prompt_info: JointPolicyPromptInfo,
     policy_model: OpenaiInferenceConfig,
-    helpful_model: ModelId,
-    harmless_model: ModelId,
+    joint_reward_model: ModelId,
     cached: bool = True,
-) -> EvaluationWithGPTResponse:
+) -> JointEvaluationWithGPTResponse:
     policy_prompt = policy_prompt_info.to_prompt_completion().prompt
     # rollout the policy
     policy_completion: GPTFullResponse = (
@@ -112,116 +92,35 @@ def get_policy_single_evaluation(
     formatted_reward_prompt: PromptForRewardModel = format_dialogue_into_reward_prompt(
         dialogue
     )
-    actual_helpful_reward = get_positive_class_proba(
-        helpful_model, prompt=formatted_reward_prompt
+    actual_reward = get_positive_class_proba(
+        joint_reward_model, prompt=formatted_reward_prompt
     )
-    actual_harmless_reward = get_positive_class_proba(
-        harmless_model, prompt=formatted_reward_prompt
-    )
-    metrics = HelpfulHarmlessEvaluationMetric(
+    metrics = JointEvaluationMetric(
         policy_prompt=policy_prompt,
         reward_prompt=formatted_reward_prompt,
         completion=policy_completion.completion,
         completed_dialogue=dialogue,
-        target_helpful=policy_prompt_info.target_reward.helpful,
-        actual_helpful=actual_helpful_reward,
-        target_harmless=policy_prompt_info.target_reward.harmless,
-        actual_harmless=actual_harmless_reward,
+        target_reward=policy_prompt_info.target_reward,
+        actual_reward=actual_reward,
     )
-    return EvaluationWithGPTResponse(
+    return JointEvaluationWithGPTResponse(
         metrics=metrics,
         full_response=policy_completion,
     )
 
-
-class TextWithRolloutNumber(BaseModel):
-    text: str
-    rollout_number: int
-
-
-def extend_with_rollout_number(
-    text: str, rollouts: int
-) -> Slist[TextWithRolloutNumber]:
-    # Add the rollout_number so that the random seed is different for each rollout
-    # The target reward generated will be the same between runs
-    # So now you can cache the rollout
-    return Slist(
-        [TextWithRolloutNumber(text=text, rollout_number=i) for i in range(rollouts)]
-    )
-
-
-@dataclasses.dataclass
-class ScatterplotResults:
-    figure: Figure
-    correlation: float
-    p_value: float
-    confidence_level: float
-    upper_correlation_bound: float
-    lower_correlation_bound: float
-
-
-def plot_scatterplot_and_correlation(
-    x: List[float], y: List[float], title: str, xlabel: str, ylabel: str
-) -> ScatterplotResults:
-    # clear seaborn
-    sns.reset_orig()
-    f, axes = plt.subplots(1)
-    # use seaborn style defaults and set the default figure size
-    sns.set(rc={"figure.figsize": (8, 8)})
-    # use x and y as the data, assign to the variables called x and y
-    # use the function regplot to make a scatterplot
-    # color the scatterplot points blue
-    # pass axes so you don't overwrite the same plots
-    plot = sns.regplot(x=x, y=y, color="b", line_kws={"color": "red"}, ax=axes)
-    # add a (1, 1) line to show perfect correlation
-    plot.plot([0, 1], [0, 1], transform=plot.transAxes, ls="--", c=".3")
-    # Calculate the correlation coefficient between x and y
-    pearson: _result_classes.PearsonRResult = pearsonr(
-        x=x,
-        y=y,
-    )
-    confidence_level = 0.95
-    confidence_interval: ConfidenceInterval = pearson.confidence_interval(
-        confidence_level=confidence_level
-    )
-    lower_bound = confidence_interval[0]
-    upper_bound = confidence_interval[1]
-    correlation: float = pearson.statistic
-    pvalue: float = pearson.pvalue
-
-    # set a title for the regplot
-    title_with_statistics = f"{title} Correlation: {correlation:.2f}, [{lower_bound:.2f}, {upper_bound:.2f}]"
-    plot.figure.suptitle(title_with_statistics)
-    # set the labels for the x and y axes
-    plot.set(xlabel=xlabel, ylabel=ylabel)
-    # set the x and y axis to (0, 1)
-    plot.set(xlim=(0, 1), ylim=(0, 1))
-    figure = plot.figure
-
-    return ScatterplotResults(
-        figure=figure,
-        correlation=correlation,
-        p_value=pvalue,
-        confidence_level=confidence_level,
-        upper_correlation_bound=upper_bound,
-        lower_correlation_bound=lower_bound,
-    )
-
-
 class EvaluationResults(BaseModel):
-    random_target_rewards: SlistPydantic[HelpfulHarmlessEvaluationMetric]
-    maximum_target_rewards: SlistPydantic[HelpfulHarmlessEvaluationMetric]
+    random_target_rewards: SlistPydantic[JointEvaluationMetric]
+    maximum_target_rewards: SlistPydantic[JointEvaluationMetric]
 
 
 def run_evaluation(
     sample_prompts: int,
     policy_model: OpenaiInferenceConfig,
-    helpful_model: ModelId,
-    harmless_model: ModelId,
+    joint_model: ModelId,
     openai_api_key: str,
     test_dataset: TestDataset,
     rollouts_per_prompt: int,
-    policy_formatter: PolicyPromptFormatter,
+    policy_formatter: JointPolicyPromptFormatter,
 ) -> EvaluationResults:
     threadpool = ThreadPoolExecutor(max_workers=20)
     set_openai_key(openai_api_key)
@@ -245,54 +144,52 @@ def run_evaluation(
     ).flatten_list()
     # We want to see the performance correlation with a random target reward
     sample_dialogue_with_random_rewards: Slist[
-        DialogueWithReward
+        DialogueWithJointReward
     ] = sample_dialogue_upscaled.map(
-        lambda text_with_rollout: assign_random_separate_target_reward(
+        lambda text_with_rollout: assign_random_joint_target_reward(
             dialogue=text_with_rollout.text,
             rollout_number=text_with_rollout.rollout_number,
         )
     )
     # Use policy_formatter to format the prompts
     formatted_random_prompts: Slist[
-        PolicyPromptInfo
+        JointPolicyPromptInfo
     ] = sample_dialogue_with_random_rewards.map(
         lambda x: policy_formatter.dialogue_reward_to_prompt_completion(x)
     )
 
     # Rollout the prompts to get the completions, and get the actual rewards
     evaluated_random_prompts: Slist[
-        HelpfulHarmlessEvaluationMetric
+        JointEvaluationMetric
     ] = formatted_random_prompts.par_map(
         lambda x: get_policy_single_evaluation(
             policy_prompt_info=x,
             policy_model=policy_model,
-            helpful_model=helpful_model,
-            harmless_model=harmless_model,
+            joint_reward_model=joint_model,
         ).metrics,
         executor=threadpool,
     )
 
     # do the same thing, but using the maximum target reward
     sample_dialogue_with_maximum_rewards: Slist[
-        DialogueWithReward
+        DialogueWithJointReward
     ] = sample_dialogue_upscaled.map(
-        lambda text_with_rollout: assign_maximum_separate_target_reward(
+        lambda text_with_rollout: assign_maximum_joint_target_reward(
             dialogue=text_with_rollout.text
         )
     )
     formatted_maximum_prompts: Slist[
-        PolicyPromptInfo
+        JointPolicyPromptInfo
     ] = sample_dialogue_with_maximum_rewards.map(
         lambda x: policy_formatter.dialogue_reward_to_prompt_completion(x)
     )
     evaluated_maximum_prompts: Slist[
-        HelpfulHarmlessEvaluationMetric
+        JointEvaluationMetric
     ] = formatted_maximum_prompts.par_map(
         lambda x: get_policy_single_evaluation(
             policy_prompt_info=x,
             policy_model=policy_model,
-            helpful_model=helpful_model,
-            harmless_model=harmless_model,
+            joint_reward_model=joint_model,
         ).metrics,
         executor=threadpool,
     )
@@ -303,72 +200,35 @@ def run_evaluation(
     )
 
 
-@dataclasses.dataclass
-class HelpfulHarmlessScatterplots:
-    helpful: ScatterplotResults
-    harmless: ScatterplotResults
-    helpful_vs_harmless: ScatterplotResults
-
-
 def plot_random_reward_evaluations(
-    random_rewards_evaluations: Slist[HelpfulHarmlessEvaluationMetric],
-) -> HelpfulHarmlessScatterplots:
+    random_rewards_evaluations: Slist[JointEvaluationMetric],
+) -> ScatterplotResults:
     # Calculate correlation coefficient of harmless
-    target_harmless: Slist[float] = random_rewards_evaluations.map(
-        lambda x: x.target_harmless
+    target: Slist[float] = random_rewards_evaluations.map(
+        lambda x: x.target_reward
     )
-    actual_harmless: Slist[float] = random_rewards_evaluations.map(
-        lambda x: x.actual_harmless
+    actual: Slist[float] = random_rewards_evaluations.map(
+        lambda x: x.actual_reward
     )
-
-    target_helpful: Slist[float] = random_rewards_evaluations.map(
-        lambda x: x.target_helpful
-    )
-    actual_helpful: Slist[float] = random_rewards_evaluations.map(
-        lambda x: x.actual_helpful
-    )
-
-    harmless_results: ScatterplotResults = plot_scatterplot_and_correlation(
-        x=actual_harmless,
-        y=target_harmless,
+    results: ScatterplotResults = plot_scatterplot_and_correlation(
+        x=actual,
+        y=target,
         title="Harmless",
         xlabel="Actual",
         ylabel="Target",
     )
+    return results
 
-    helpful_results = plot_scatterplot_and_correlation(
-        x=actual_helpful,
-        y=target_helpful,
-        title="Helpful",
-        xlabel="Actual",
-        ylabel="Target",
-    )
-
-    # plot Actual helpful vs Actual Harmless
-    helpful_vs_harmless_results = plot_scatterplot_and_correlation(
-        x=actual_helpful,
-        y=actual_harmless,
-        title="Helpful vs Harmless",
-        xlabel="Actual Helpful",
-        ylabel="Actual Harmless",
-    )
-
-    return HelpfulHarmlessScatterplots(
-        helpful=helpful_results,
-        harmless=harmless_results,
-        helpful_vs_harmless=helpful_vs_harmless_results,
-    )
 
 
 def log_results_to_neptune(
-    scatter_plots: HelpfulHarmlessScatterplots,
+    scatter_plots: ScatterplotResults,
     neptune_api_key: str,
     neptune_project_name: str,
     neptune_run_id: str,
     policy_config: OpenaiInferenceConfig,
-    helpful_model: ModelId,
-    harmless_model: ModelId,
-    formatter: PolicyPromptFormatter,
+    joint_model: ModelId,
+    formatter: JointPolicyPromptFormatter,
     number_samples: int,
     rollouts_per_sample: int,
     results: EvaluationResults,
@@ -376,26 +236,18 @@ def log_results_to_neptune(
     temperature = policy_config.temperature
     # add the temperature to the evaluation_key
     evaluation_key = f"evaluation_temp_{temperature}"
-    helpful_results = scatter_plots.helpful
-    harmless_results = scatter_plots.harmless
-    helpful_vs_harmless_results = scatter_plots.helpful_vs_harmless
 
-    # Print the results
-    print(f"Correlation of Harmless: {harmless_results.correlation}")
-    print(f"Correlation of Helpful: {helpful_results.correlation}")
+    print(f"Correlation coeffiicent of joint: {scatter_plots.correlation}")
 
     # Calculate the average reward when using the maximum target reward
-    average_helpless_reward: Optional[float] = results.maximum_target_rewards.map(
-        lambda x: x.actual_harmless
+    average_reward: Optional[float] = results.maximum_target_rewards.map(
+        lambda x: x.actual_reward
     ).average()
-    average_helpful_reward: Optional[float] = results.maximum_target_rewards.map(
-        lambda x: x.actual_helpful
-    ).average()
+
     # print
     print(
-        f"Average Harmless Reward for maximum target reward: {average_helpless_reward}"
+        f"Average reward for maximum target reward: {average_reward}"
     )
-    print(f"Average Helpful Reward for maximum target reward: {average_helpful_reward}")
 
     # convert to df
     # write the results to dataframe
@@ -415,54 +267,33 @@ def log_results_to_neptune(
     try:
         # Log the config
         run[f"{evaluation_key}/policy_config"] = policy_config.dict()
-        run[f"{evaluation_key}/helpful_model"] = helpful_model
-        run[f"{evaluation_key}/harmless_model"] = harmless_model
+        run[f"{evaluation_key}/joint_model"] = joint_model
         run[f"{evaluation_key}/policy_formatter"] = formatter.name
         run[f"{evaluation_key}/number_samples"] = number_samples
         run[f"{evaluation_key}/rollouts_per_sample"] = rollouts_per_sample
         # Log the results under evaluation
-        run[f"{evaluation_key}/correlation_harmless"] = harmless_results.correlation
-        run[f"{evaluation_key}/pvalue_harmless"] = harmless_results.p_value
+        run[f"{evaluation_key}/correlation"] = scatter_plots.correlation
+        run[f"{evaluation_key}/pvalue"] = scatter_plots.p_value
         # upper bound
         run[
-            f"{evaluation_key}/upper_bound_harmless"
-        ] = harmless_results.upper_correlation_bound
+            f"{evaluation_key}/upper_bound"
+        ] = scatter_plots.upper_correlation_bound
         # lower bound
         run[
-            f"{evaluation_key}/lower_bound_harmless"
-        ] = harmless_results.lower_correlation_bound
+            f"{evaluation_key}/lower_bound"
+        ] = scatter_plots.lower_correlation_bound
         # confidence
         run[
-            f"{evaluation_key}/confidence_level_harmless"
-        ] = harmless_results.confidence_level
-        # Same thing for helpful
-        run[f"{evaluation_key}/correlation_helpful"] = helpful_results.correlation
-        run[f"{evaluation_key}/pvalue_helpful"] = helpful_results.p_value
-        # upper bound
-        run[
-            f"{evaluation_key}/upper_bound_helpful"
-        ] = helpful_results.upper_correlation_bound
-        # lower bound
-        run[
-            f"{evaluation_key}/lower_bound_helpful"
-        ] = helpful_results.lower_correlation_bound
-        # confidence
-        run[
-            f"{evaluation_key}/confidence_level_helpful"
-        ] = helpful_results.confidence_level
+            f"{evaluation_key}/confidence_level"
+        ] = scatter_plots.confidence_level
+
         # Log the average reward for maximum target reward
         run[
-            f"{evaluation_key}/average_harmless_reward_maximum_target"
-        ] = average_helpless_reward
-        run[
-            f"{evaluation_key}/average_helpful_reward_maximum_target"
-        ] = average_helpful_reward
+            f"{evaluation_key}/average_joint_maximum_target"
+        ] = average_reward
         # Log the plots
-        run[f"{evaluation_key}/helpful_plot"].upload(helpful_results.figure)
-        run[f"{evaluation_key}/harmless_plot"].upload(harmless_results.figure)
-        run[f"{evaluation_key}/helpful_vs_harmless_plot"].upload(
-            helpful_vs_harmless_results.figure
-        )
+        run[f"{evaluation_key}/joint_plot"].upload(scatter_plots.figure)
+
         # Save the results dataframe as html
         run[f"{evaluation_key}/random_rewards_html"].upload(
             File.as_html(random_rewards_df)
@@ -534,9 +365,8 @@ if __name__ == "__main__":
         top_p=1.0,
         stop=END_TOKEN,
     )
-    helpful_model = ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46")
-    harmless_model = ModelId("babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12")
-    policy_formatter = RewardAtBottomFormatter()
+    joint_model = ModelId("babbage:ft-leadiq:thejaminator-offline-assistant-policy-2023-01-04-15-10-04")
+    policy_formatter = JointRewardAtBottomFormatter()
     number_samples = 500
     rollouts_per_prompts = 1
     evaluations: EvaluationResults = run_evaluation(
@@ -546,12 +376,11 @@ if __name__ == "__main__":
         openai_api_key=OPENAI_KEY,
         test_dataset=TestDataset.HARMLESS_HELPFUL,
         policy_formatter=policy_formatter,
-        helpful_model=helpful_model,
-        harmless_model=harmless_model,
+        joint_model=joint_model,
     )
 
     # plot the results
-    scatter_plots: HelpfulHarmlessScatterplots = plot_random_reward_evaluations(
+    scatter_plots: ScatterplotResults = plot_random_reward_evaluations(
         random_rewards_evaluations=evaluations.random_target_rewards
     )
 
@@ -562,25 +391,9 @@ if __name__ == "__main__":
         neptune_project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
         neptune_run_id=run_id,
         policy_config=policy_config,
-        helpful_model=helpful_model,
-        harmless_model=harmless_model,
+        joint_model=joint_model,
         formatter=policy_formatter,
         number_samples=number_samples,
         rollouts_per_sample=rollouts_per_prompts,
         results=evaluations,
     )
-    """150k samples offline
-    Target 0.99
-    Average actual helpfulness: 0.5515753179993419
-    Average actual harmlessness: 0.4696473063947702
-    
-    Target 1.00
-    Average actual helpfulness: 0.42767436214852766
-    Average actual harmlessness: 0.5496383727934258
-    
-    """
-
-    """Control av. reward for vanilla babbage
-    Average actual helpfulness: 0.45239336682231596
-    Average actual harmlessness: 0.4870573758367717 
-    """
