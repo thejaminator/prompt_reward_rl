@@ -2,7 +2,7 @@ import pathlib
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Callable, Sequence, Optional
 
 import neptune.new
 import pandas
@@ -70,12 +70,14 @@ class AlwaysContinueHandler(ShouldContinueHandler):
     def should_continue(self, training_data_path: Path) -> bool:
         return True
 
+
 def logged_fine_tune(
     train: Sequence[PromptCompletion],
     params: FineTuneParams,
     project_name: str,
     completion_start_token: str,
     completion_end_token: str,
+    model_suffix: Optional[str] = None,
     openai_key: str = DEFAULT_OPENAI_KEY,
     # To log more neptune info before finetune
     neptune_pretrain_callable: NeptuneRunCallable = NeptuneDoNothing,
@@ -131,7 +133,7 @@ def logged_fine_tune(
         run["parameters"] = params.dict()
 
         # Set suffix as project_name
-        params.suffix = project_name
+        params.suffix = project_name if model_suffix is None else model_suffix
         job_id = fine_tune(train_path=file_path, params=params)
         run["job_id"] = job_id
 
