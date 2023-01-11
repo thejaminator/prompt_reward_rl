@@ -5,7 +5,7 @@ from slist import Slist
 
 from api.dataset_paths import anthropic_harmless_test_path, anthropic_helpful_test_path
 from api.set_key import set_openai_key
-from evaluate.classification import get_pair_predicted_chosen
+from evaluate.classification import get_pair_predicted_result, PairPrediction
 from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
 from settings import OPENAI_KEY
 
@@ -36,6 +36,17 @@ class TestDataset(str, Enum):
     HARMLESS_HELPFUL = "harmless_helpful"
 
 
+def plot_distribution_chosen(predictions: Slist[float]) -> None:
+    import matplotlib.pyplot as plt
+
+    plt.hist(predictions, bins=20)
+    # Set title to "Probability distribution for chosen"
+    plt.title("Probability distribution for chosen")
+    # Save the plot to "chosen_distribution.png"
+    plt.savefig("chosen_distribution.png")
+    plt.show()
+
+
 def main(limit: int, model_id: str, openai_api_key: str, test_dataset: TestDataset):
     set_openai_key(openai_api_key)
     # Load the test datasets
@@ -50,10 +61,12 @@ def main(limit: int, model_id: str, openai_api_key: str, test_dataset: TestDatas
     )
     sample = all_test.shuffle(seed="123").take(limit)
     # Get the predictions
-    predictions = sample.map(lambda pair: get_pair_predicted_chosen(model_id, pair))
+    predictions: Slist[PairPrediction] = sample.map(lambda pair: get_pair_predicted_result(model_id, pair))
     # Calculate the accuracy
-    accuracy: Optional[float] = predictions.average()
+    accuracy: Optional[float] = predictions.map(lambda x: x.is_chosen_higher_proba).average()
     print(f"Accuracy: {accuracy} for {model_id} on {limit} samples")
+    # Plot the distribution of predictions for the chosen
+    plot_distribution_chosen(predictions.map(lambda x: x.chosen_proba))
 
 
 if __name__ == "__main__":
@@ -69,11 +82,10 @@ if __name__ == "__main__":
     # Harmless model on 42537 pairs babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12 0.717 on harmless
     main(
         limit=400,
-        model_id="babbage:ft-leadiq:leadiq-assistant-reward-model-2023-01-03-14-24-13",
+        model_id="babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46",
         openai_api_key=OPENAI_KEY,
         test_dataset=TestDataset.HARMLESS_HELPFUL,
     )
-
 
     # 1,102,676 tokens for 6122 requests (samples)
     # 1,102,676 / 6122 * 1000 = 180,116 tokens per 1000 samples

@@ -2,6 +2,7 @@ from typing import NewType
 
 import numpy as np
 from openai.error import RateLimitError, APIConnectionError
+from pydantic import BaseModel
 from retry import retry
 
 from api.redis_cache import redis_cache
@@ -17,8 +18,8 @@ def format_dialogue_into_reward_prompt(conversation: str) -> PromptForRewardMode
     return PromptForRewardModel(conversation.strip() + end_prompt_seperator)
 
 
-@redis_cache()
 @retry(exceptions=(RateLimitError,APIConnectionError), tries=5, delay=20)
+@redis_cache()
 def get_positive_class_proba(model_id: str, prompt: PromptForRewardModel) -> float:
     """Returns the probability of the positive class. aka reward"""
     # We just need 1 token
@@ -38,10 +39,22 @@ def get_positive_class_proba(model_id: str, prompt: PromptForRewardModel) -> flo
     return normalize_positive_proba
 
 
-def get_pair_predicted_chosen(model_id: str, pair: AnthropicRawFormat) -> bool:
+class PairPrediction(BaseModel):
+    chosen_proba: float
+    rejected_proba: float
+    is_chosen_higher_proba: bool
+
+def get_pair_predicted_result(model_id: str, pair: AnthropicRawFormat) -> PairPrediction:
     """Returns true if the model predicts the chosen completion"""
     formatted_chosen_prompt = format_dialogue_into_reward_prompt(pair.chosen)
     chosen_proba = get_positive_class_proba(model_id, formatted_chosen_prompt)
     formatted_rejected_prompt = format_dialogue_into_reward_prompt(pair.rejected)
     rejected_proba = get_positive_class_proba(model_id, formatted_rejected_prompt)
-    return chosen_proba > rejected_proba
+    is_chosen_higher_proba =  chosen_proba > rejected_proba
+    return PairPrediction(
+        chosen_proba=chosen_proba,
+        rejected_proba=rejected_proba,
+        is_chosen_higher_proba=is_chosen_higher_proba,
+    )
+
+

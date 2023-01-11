@@ -521,7 +521,7 @@ def get_openai_model_from_neptune(
 
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
-    run_id = "OF-17"
+    run_id = "OF-8"
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,

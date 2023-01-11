@@ -1,8 +1,8 @@
-# Aligning Language Models by putting the reward in the prompt
+# Attempts to align Language Models by putting the reward in the prompt
 We investigate ["Upside-Down"](https://arxiv.org/abs/1912.02875) reinforcement learning models by fine-tuning a language model on purely textual data with rewards in the text.
 We utilize human feedback data from [Anthropic](https://github.com/anthropics/hh-rlhf) to train a reward model. Next, we put that reward as text in the prompt. Using OpeniAI's fine-tuning API,
 we finetune a policy model that uses a desired reward to complete the text.
-Like [Decision Transformers](https://arxiv.org/abs/2106.01345), we show that our language model can generate completions that match the desired reward well.
+We wish to explore if like [Decision Transformers](https://arxiv.org/abs/2106.01345), our language model can generate completions that match the desired reward well, and maximize the reward.
 
 Note: This is still a work in progress. We aim to provide a vertical slice of results in this repo. Results may change as we experiment with larger models.
 ## Introduction
@@ -80,6 +80,19 @@ Only at 100,000 training examples did we see a visible effect of the target rewa
 
 \* In the future, we would like to compare this with larger model sizes - curie and davinci.
 \* TODO: Control for temperature since the better performance can simply be a result of the model having a lower entropy. Sweep for different temperatures and obtain the best scores. 
+
+
+#### Does it work to maximize both rewards?
+We investigate the ideal case where we set both target rewards to their maximum (1.0).
+However, this does not result in completions that maximize both rewards.
+Instead, whenever the "true" reward for helpfulness, the model tends to compensate by decreasing the "true" reward for harmlessness.
+![helpful_vs_harmless_plot.png](images%2Fhelpful_vs_harmless_plot.png)
+
+
+TODO: Still preliminary results
+- Should explore online training / normalization
+- Should compare with a policy that is just trained on pure chosen examples (behavioral cloning)
+- Compare with a reward that comes from a joint reward model rather than separate reward models
 
 
 #### Effect of more epochs

@@ -14,7 +14,7 @@ from evaluate.classification import (
     get_positive_class_proba,
 )
 from parsing.parse_raw import AnthropicRawFormat
-from settings import OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT
+from settings import OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT, OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT
 from train.joint_policy_prompt_formatter import (
     JointPolicyPromptFormatter,
     JointRewardAtBottomFormatter,
@@ -58,8 +58,8 @@ def train(
     raw_prompts: Slist[AnthropicRawFormat] = (
         get_harmless_helpful_train().shuffle(seed="999").take(pair_limit)
     )
-    joint_model: ModelId = ModelId(
-        "babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26"
+    reward_model: ModelId = ModelId(
+        "babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12"
     )
     thread_pool = ThreadPoolExecutor(max_workers=20)
     counter = 0
@@ -74,10 +74,10 @@ def train(
         return Slist(
             # Get rewards for both chosen and rejected
             [
-                get_offline_reward(dialogue=raw.chosen, joint_reward_model=joint_model),
+                get_offline_reward(dialogue=raw.chosen, joint_reward_model=reward_model),
                 get_offline_reward(
                     dialogue=raw.rejected,
-                    joint_reward_model=joint_model,
+                    joint_reward_model=reward_model,
                 ),
             ]
         )
@@ -104,17 +104,17 @@ def train(
             run["policy_formatter"] = policy_formatter.name
             run["train/total_train_examples"] = len(prompt_completions)
             run["train/chunk_number"] = idx + 1
+            run["train/reward_model"] = reward_model
 
-        # for idx greater than 0, we need to set a lower learning rate ( half )
         if idx > 0:
             updated_fine_tune_params.learning_rate_multiplier = (
-                finetune_params.learning_rate_multiplier / 2
+                finetune_params.learning_rate_multiplier
             )
         print(f"Training chunk {idx + 1} of {len(training_chunks)}")
         new_model_id = logged_fine_tune(
             train=chunk,
             params=updated_fine_tune_params,
-            project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
+            project_name=OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
             completion_start_token="",
             completion_end_token=END_TOKEN,
             neptune_pretrain_callable=neptune_pretrain_callable,

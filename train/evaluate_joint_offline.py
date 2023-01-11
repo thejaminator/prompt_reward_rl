@@ -31,7 +31,7 @@ from settings import (
     OPENAI_KEY,
     NEPTUNE_KEY,
     OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
-    MODEL_ID_NEPTUNE_KEY,
+    MODEL_ID_NEPTUNE_KEY, OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT, ONLINE_POLICY_NEPTUNE_PROJECT,
 )
 from train.assign_rewards import (
     assign_random_joint_target_reward, assign_maximum_joint_target_reward,
@@ -116,7 +116,7 @@ class EvaluationResults(BaseModel):
 def run_evaluation(
     sample_prompts: int,
     policy_model: OpenaiInferenceConfig,
-    joint_model: ModelId,
+    joint_reward_model: ModelId,
     openai_api_key: str,
     test_dataset: TestDataset,
     rollouts_per_prompt: int,
@@ -165,7 +165,7 @@ def run_evaluation(
         lambda x: get_policy_single_evaluation(
             policy_prompt_info=x,
             policy_model=policy_model,
-            joint_reward_model=joint_model,
+            joint_reward_model=joint_reward_model,
         ).metrics,
         executor=threadpool,
     )
@@ -189,7 +189,7 @@ def run_evaluation(
         lambda x: get_policy_single_evaluation(
             policy_prompt_info=x,
             policy_model=policy_model,
-            joint_reward_model=joint_model,
+            joint_reward_model=joint_reward_model,
         ).metrics,
         executor=threadpool,
     )
@@ -213,7 +213,7 @@ def plot_random_reward_evaluations(
     results: ScatterplotResults = plot_scatterplot_and_correlation(
         x=actual,
         y=target,
-        title="Harmless",
+        title="Joint reward",
         xlabel="Actual",
         ylabel="Target",
     )
@@ -227,7 +227,7 @@ def log_results_to_neptune(
     neptune_project_name: str,
     neptune_run_id: str,
     policy_config: OpenaiInferenceConfig,
-    joint_model: ModelId,
+    joint_reward_model: ModelId,
     formatter: JointPolicyPromptFormatter,
     number_samples: int,
     rollouts_per_sample: int,
@@ -267,7 +267,7 @@ def log_results_to_neptune(
     try:
         # Log the config
         run[f"{evaluation_key}/policy_config"] = policy_config.dict()
-        run[f"{evaluation_key}/joint_model"] = joint_model
+        run[f"{evaluation_key}/joint_model"] = joint_reward_model
         run[f"{evaluation_key}/policy_formatter"] = formatter.name
         run[f"{evaluation_key}/number_samples"] = number_samples
         run[f"{evaluation_key}/rollouts_per_sample"] = rollouts_per_sample
@@ -352,10 +352,11 @@ def get_openai_model_from_neptune(
 
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
-    run_id = "OF-17"
+    run_id = "OF1-13"
+    project_name = OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
-        neptune_project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
+        neptune_project_name=project_name,
         neptune_run_id=run_id,
     )
     policy_config = OpenaiInferenceConfig(
@@ -365,7 +366,7 @@ if __name__ == "__main__":
         top_p=1.0,
         stop=END_TOKEN,
     )
-    joint_model = ModelId("babbage:ft-leadiq:thejaminator-offline-assistant-policy-2023-01-04-15-10-04")
+    joint_reward_model = ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46")
     policy_formatter = JointRewardAtBottomFormatter()
     number_samples = 500
     rollouts_per_prompts = 1
@@ -376,7 +377,7 @@ if __name__ == "__main__":
         openai_api_key=OPENAI_KEY,
         test_dataset=TestDataset.HARMLESS_HELPFUL,
         policy_formatter=policy_formatter,
-        joint_model=joint_model,
+        joint_reward_model=joint_reward_model,
     )
 
     # plot the results
@@ -388,10 +389,10 @@ if __name__ == "__main__":
     log_results_to_neptune(
         scatter_plots=scatter_plots,
         neptune_api_key=NEPTUNE_KEY,
-        neptune_project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
+        neptune_project_name=project_name,
         neptune_run_id=run_id,
         policy_config=policy_config,
-        joint_model=joint_model,
+        joint_reward_model=joint_reward_model,
         formatter=policy_formatter,
         number_samples=number_samples,
         rollouts_per_sample=rollouts_per_prompts,
