@@ -17,6 +17,9 @@ We may want to specify a lower target helpfulness to lower the risk of the model
 By setting it at inference time, we can avoid having to train a separate policy model for each differing target reward.
 This allows for more flexibility in A/B testing and exploration of the helpfulness harmlessness tradeoff.
 
+It would also be useful in investigating the safety of LMs trained in a Decision Transformer setting.
+Since the reward is specified in the prompt, we can choose to minimize the target reward instead at inference time.  
+
 ### Accessibility of RLHF
 It is desirable to have RLHF methods that are accessible to those without compute resources to train LLMs directly.
 Openai does have a [fine-tuning API](https://beta.openai.com/docs/guides/fine-tuning) for LLMs. However, it does not support training via PPO.
