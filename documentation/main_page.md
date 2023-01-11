@@ -188,6 +188,7 @@ If the chosen dialogue has a higher probability for the good token than the reje
 
 
 ![antropic_figure_7.png](images%2Fantropic_figure_7.png)
+Figure: Anthropic's reward model accuracy on for different number of model parameters.
 When training a joint reward model, we get an accuracy of 0.68. This seems close to anthropic's accuracy for a 10^9 parameter model, assuming that they are evaluating on the same dataset. 
 
 TODO: Find out or just ask anthropic whats the dataset? 
