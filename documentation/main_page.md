@@ -96,6 +96,7 @@ Instead, whenever the "true" reward for helpfulness, the model tends to compensa
 | Av. Helpfulness  | 0.45                | TODO                                                    | 0.64                                                   | 0.64                                                                  | 0.57                                                                                   |
 | Av. Harmlessness | 0.49                | TODO                                                    | 0.33                                                   | 0.31                                                                  | 0.46                                                                                   |
 | Av. Both         | 0.47                | TODO                                                    | 0.49                                                   | 0.48                                                                  | 0.52                                                                                   |
+
 Figure: Average rewards for 500 prompts in the test set. Each prompt had 1 rollout.
 
 In order to maximize a reward, we first sweep for the optimal target reward that maximizes the "actual" reward. 
@@ -134,13 +135,6 @@ We do not observe a significant performance difference between two models.
 It appears that the number of training steps rather than the number of unique training examples are the limiting factor, at least for 50,000 unique examples.
 
 We also experimented with changing the learning rate from the original 0.1 to 0.05 and 0.2. This did not appear to help.
-
-### Average reward before and after offline training
-We investigate the average reward if we set the target rewards to their maximize value of 1.
-
-One possible criticism of offline training is that since we collected data for our reward model, we could also have used that dataset for regular fine tuning.
-We compare it with a model where we take simply finetune on the chosen response of the labeller.
-Note that since we still evaluate on the reward model rather than an actual human, this is not a fair comparison in terms of whether it is more effective in practice. We are inteerested instead in whether we could have better optimization of the reward through regular finetuning.
 
 
 ## Reward model details
