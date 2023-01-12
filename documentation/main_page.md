@@ -93,9 +93,9 @@ Instead, whenever the "true" reward for helpfulness, the model tends to compensa
 
 |                  | (1) Vanilla babbage | (2) Behavioral Cloning on helpful and harmless examples | (3) Maximize helpfulness on helpfulness trained policy | (4) Maximize helpfulness on helpfulness + harmlessness trained policy | (5) Maximize helpfulness AND harmlessness on helpfulness + harmlessness trained policy |
 |------------------|---------------------|---------------------------------------------------------|--------------------------------------------------------|-----------------------------------------------------------------------|----------------------------------------------------------------------------------------|
-| Av. Helpfulness  | 0.45                | TODO                                                    | 0.64                                                   | 0.64                                                                  | 0.57                                                                                   |
-| Av. Harmlessness | 0.49                | TODO                                                    | 0.33                                                   | 0.31                                                                  | 0.46                                                                                   |
-| Av. Both         | 0.47                | TODO                                                    | 0.49                                                   | 0.48                                                                  | 0.52                                                                                   |
+| Av. Helpfulness  | 0.45                | 0.52                                                    | 0.64                                                   | 0.64                                                                  | 0.57                                                                                   |
+| Av. Harmlessness | 0.49                | 0.44                                                    | 0.33                                                   | 0.31                                                                  | 0.46                                                                                   |
+| Av. Both         | 0.47                | 0.48                                                    | 0.49                                                   | 0.48                                                                  | 0.52                                                                                   |
 
 Figure: Average rewards for 500 prompts in the test set. Each prompt had 1 rollout.
 
@@ -119,6 +119,7 @@ We are still investigating if our policy model fails to maximize both rewards be
 
 
 TODO: Still preliminary results
+- Should sweep hyperparams for behavioral cloning more to show that we really aren't just doing behavioral cloning.
 - Should explore online training / normalization. Did abit of this but not indepth and didnt work.
 - Compare with a reward that comes from a joint reward model rather than separate reward models. Which is what anthropic did. Did this but policy model failed to increase the reward. So maybe policy is too small to find at least an adversarial policy? 
 
