@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from neptune.new import Run
 from openai.error import RateLimitError, APIConnectionError
 from retry import retry
-from slist import Slist
+from slist import Slist, identity
 
 from api.logged_fine_tune import logged_fine_tune, AlwaysContinueHandler
 from api.openai_fine_tune import ModelId, FineTuneParams
@@ -14,7 +14,10 @@ from evaluate.classification import (
     get_positive_class_proba,
 )
 from parsing.parse_raw import AnthropicRawFormat
-from settings import OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT, OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT
+from settings import (
+    OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
+    OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
+)
 from train.joint_policy_prompt_formatter import (
     JointPolicyPromptFormatter,
     JointRewardAtBottomFormatter,
@@ -53,13 +56,14 @@ def train(
     policy_formatter: JointPolicyPromptFormatter,
     pair_limit: int,
     finetune_params: FineTuneParams,
+    chunks: int,
 ) -> ModelId:
     # Get the prompts
     raw_prompts: Slist[AnthropicRawFormat] = (
         get_harmless_helpful_train().shuffle(seed="999").take(pair_limit)
     )
     reward_model: ModelId = ModelId(
-        "babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12"
+        "babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26"
     )
     thread_pool = ThreadPoolExecutor(max_workers=20)
     counter = 0
@@ -74,7 +78,9 @@ def train(
         return Slist(
             # Get rewards for both chosen and rejected
             [
-                get_offline_reward(dialogue=raw.chosen, joint_reward_model=reward_model),
+                get_offline_reward(
+                    dialogue=raw.chosen, joint_reward_model=reward_model
+                ),
                 get_offline_reward(
                     dialogue=raw.rejected,
                     joint_reward_model=reward_model,
@@ -87,6 +93,16 @@ def train(
         get_rewards_and_count,
         executor=thread_pool,
     ).flatten_list()
+    # 95th percentile
+    ninety_fifth_percentile_helpful = prompt_with_rewards.map(
+        lambda x: x.target_reward
+    ).sort_by(identity).take(int(len(prompt_with_rewards) * 0.95)).last_or_raise()
+    print(f"95th percentile helpful reward: {ninety_fifth_percentile_helpful}")
+    # 5th percentile
+    fifth_percentile_helpful = prompt_with_rewards.map(
+        lambda x: x.target_reward
+    ).sort_by(identity).take(int(len(prompt_with_rewards) * 0.05)).last_or_raise()
+    print(f"5th percentile helpful reward: {fifth_percentile_helpful}")
     # Convert to prompt completions
     prompt_completions: Slist[PromptCompletion] = prompt_with_rewards.map(
         lambda x: policy_formatter.dialogue_reward_to_prompt_completion(
@@ -96,7 +112,7 @@ def train(
 
     # Split the prompts into chunks of 25k examples
     # This gets around the limitation that OpenAI doesn't save snapshots of your model
-    training_chunks: Slist[Slist[PromptCompletion]] = prompt_completions.grouped(25000)
+    training_chunks: Slist[Slist[PromptCompletion]] = prompt_completions.grouped(chunks)
     updated_fine_tune_params: FineTuneParams = finetune_params.copy()
     for idx, chunk in training_chunks.enumerated():
 
@@ -137,5 +153,10 @@ if __name__ == "__main__":
     )
     # Run the main function
     # Try 1000, 10000, 25000, 50000, 75000
-    train(policy_formatter, pair_limit=75000, finetune_params=finetune_params)
+    train(
+        policy_formatter,
+        pair_limit=75000,
+        finetune_params=finetune_params,
+        chunks=999999,
+    )
     # export PYTHONPATH=.; python train/train_joint_offline.py

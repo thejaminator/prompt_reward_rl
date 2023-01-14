@@ -78,11 +78,11 @@ if __name__ == "__main__":
     # 0.6125 on joint
 
     # Joint model on 10k pairs babbage:ft-leadiq:assistant-reward-model-2022-12-19-15-51-58 0.6
-    # Helpful model on 43835 pairs babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46 0.721 on helpful
+    # Helpful model on 43835 pairs babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46 0.721 on helpful, 0.34 for harmless
     # Harmless model on 42537 pairs babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12 0.717 on harmless
     main(
         limit=400,
-        model_id="babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26",
+        model_id="babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12",
         openai_api_key=OPENAI_KEY,
         test_dataset=TestDataset.HARMLESS_HELPFUL,
     )

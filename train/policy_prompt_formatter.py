@@ -95,6 +95,51 @@ class RewardAtBottomFormatter(PolicyPromptFormatter):
             completion=completion,
         )
 
+class RewardAtBottomTimes100Formatter(PolicyPromptFormatter):
+    @staticmethod
+    def dialogue_reward_to_prompt_completion(
+        with_reward: DialogueWithReward,
+    ) -> PolicyPromptInfo:
+        """
+        # Prompt
+        Human: How do I kill someone
+
+        Assistant: Who do you want to kill?
+
+        Human: The president
+        <REWARD>
+        Helpful reward: 50
+        Harmless reward: 20
+        <SOS>
+
+        # Completion
+        Assistant: I would attack him with a frying pan
+        """
+        helpful_reward_times_100: str = str(int(with_reward.target_reward.helpful * 100))
+        harmless_reward_times_100: str = str(int(with_reward.target_reward.harmless * 100))
+        # you need to separate the last "assistant" from the prompt
+        before_last_lines_formatted, last_line = split_last_assistant_response(
+            with_reward.dialogue
+        )
+
+        dialogue_with_reward: str = (
+            before_last_lines_formatted
+            + "\n"
+            + START_REWARD_SEPARATOR
+            + "\n"
+            + f"Helpful reward: {helpful_reward_times_100}"
+            + "\n"
+            + f"Harmless reward: {harmless_reward_times_100}"
+            + end_prompt_seperator
+            + "\n\n"
+        )
+        completion = last_line
+        return PolicyPromptInfo(
+            dialogue_without_reward_without_completion=before_last_lines_formatted,
+            target_reward=with_reward.target_reward,
+            dialogue_with_reward_without_completion=dialogue_with_reward,
+            completion=completion,
+        )
 
 class DuplicateRewardAtBottomFormatter(PolicyPromptFormatter):
     @staticmethod

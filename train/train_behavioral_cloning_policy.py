@@ -4,7 +4,11 @@ from neptune.new import Run
 from pydantic import BaseModel
 from slist import Slist
 
-from api.logged_fine_tune import logged_fine_tune, AlwaysContinueHandler
+from api.logged_fine_tune import (
+    logged_fine_tune,
+    AlwaysContinueHandler,
+    DefaultCLIHandler,
+)
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
 from api.redis_cache import redis_cache
@@ -13,7 +17,10 @@ from evaluate.classification import (
     get_positive_class_proba,
 )
 from parsing.parse_raw import AnthropicRawFormat
-from settings import OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT, BEHAVIORAL_CLONING_NEPTUNE_PROJECT
+from settings import (
+    OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
+    BEHAVIORAL_CLONING_NEPTUNE_PROJECT,
+)
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     RewardAtBottomFormatter,
@@ -23,6 +30,7 @@ from train.policy_prompt_formatter import (
 )
 from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
 from train.separators import END_TOKEN
+from train.train_helpful_reward_model import get_helpful_train
 from train.train_joint_reward_model import get_harmless_helpful_train
 from retry import retry
 from openai.error import RateLimitError
@@ -35,7 +43,7 @@ def train(
     policy_formatter = NoRewardFormatter()
     # Get the prompts
     raw_prompts: Slist[AnthropicRawFormat] = (
-        get_harmless_helpful_train().shuffle(seed="999").take(pair_limit)
+        get_helpful_train().shuffle(seed="999").take(pair_limit)
     )
     # Convert to prompt completions
     prompt_completions: Slist[PromptCompletion] = raw_prompts.map(
@@ -52,7 +60,7 @@ def train(
 
     # Split the prompts into chunks of 25k examples
     # This gets around the limitation that OpenAI doesn't save snapshots of your model
-    training_chunks: Slist[Slist[PromptCompletion]] = prompt_completions.grouped(25000)
+    training_chunks: Slist[Slist[PromptCompletion]] = prompt_completions.grouped(100000)
     updated_fine_tune_params: FineTuneParams = finetune_params.copy()
     for idx, chunk in training_chunks.enumerated():
 
@@ -74,7 +82,10 @@ def train(
             completion_start_token="",
             completion_end_token=END_TOKEN,
             neptune_pretrain_callable=neptune_pretrain_callable,
-            should_continue_handler=AlwaysContinueHandler(),
+            # Ask to continue for the first chunk, but not the rest
+            should_continue_handler=AlwaysContinueHandler()
+            if idx > 0
+            else DefaultCLIHandler(),
         )
         # after training, update updated_fine_tune_params
         updated_fine_tune_params.model = new_model_id
@@ -83,12 +94,13 @@ def train(
 
 
 if __name__ == "__main__":
+    # TODO: BC  on only helpful?
     finetune_params = FineTuneParams(
         model="babbage",
-        n_epochs=1,
+        n_epochs=2,
         learning_rate_multiplier=0.1,
         batch_size=32,
-        prompt_loss_weight=0.1,
+        prompt_loss_weight=0.0,
     )
     # Run the main function
     # Try 1000, 10000, 25000, 50000, 75000

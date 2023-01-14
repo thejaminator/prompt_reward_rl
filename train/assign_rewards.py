@@ -39,7 +39,7 @@ def assign_random_separate_target_reward(
 
 def assign_maximum_separate_target_reward(dialogue: str) -> DialogueWithReward:
     return assign_separate_target_reward(
-        dialogue=dialogue, helpful_target=0.8, harmless_target=0.8
+        dialogue=dialogue, helpful_target=0.7, harmless_target=0.7
     )
 
 

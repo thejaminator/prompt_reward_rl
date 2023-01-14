@@ -1,8 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
-from typing import Sequence, Type
+from typing import Sequence, Type, Optional
 
 import pandas as pd
 from neptune.new import Run
+from openai import InvalidRequestError
 from pydantic import BaseModel
 from slist import Slist
 from neptune.new.types import File
@@ -49,7 +50,7 @@ def rollout_and_evaluate(
     target_reward: HelpfulHarmlessReward,
     helpful_model: ModelId,
     harmless_model: ModelId,
-) -> EvaluationWithGPTResponse:
+) -> Optional[EvaluationWithGPTResponse]:
     # do the same thing, but using the maximum target reward
     dialogue_with_maximum_reward: DialogueWithReward = assign_separate_target_reward(
         dialogue=dialogue,
@@ -61,13 +62,17 @@ def rollout_and_evaluate(
     )
     # Rollout the prompt using the policy model, with the target reward
     # This also evaluates the rollout and gets the actual reward
-    rollout: EvaluationWithGPTResponse = get_policy_single_evaluation(
-        policy_prompt_info=formatted_maximum_reward,
-        policy_model=policy_model,
-        helpful_model=helpful_model,
-        harmless_model=harmless_model,
-        cached=False,  # Don't cache this since we have multiple rollouts, all with the same target temperature
-    )
+    try:
+        rollout: EvaluationWithGPTResponse = get_policy_single_evaluation(
+            policy_prompt_info=formatted_maximum_reward,
+            policy_model=policy_model,
+            helpful_model=helpful_model,
+            harmless_model=harmless_model,
+            cached=False,  # Don't cache this since we have multiple rollouts, all with the same target temperature
+        )
+    except InvalidRequestError as e:
+        print(f"Invalid request error, probably token limit: {e}")
+        return None
     return rollout
 
 
@@ -185,7 +190,7 @@ def single_iteration(
             harmless_model=harmless_model,
         ),
         executor=threadpool,
-    )
+    ).flatten_option()
     # Store additional metrics about the buffer of rollouts
     rollout_buffer_metrics: RolloutBufferMetrics = calculate_rollout_metrics(
         rollouts=rollouts,
@@ -196,7 +201,7 @@ def single_iteration(
     print(f"Rollout metrics: {rollout_buffer_metrics}")
 
     # Create normalizer
-    normalizer = normalizer_type(
+    normalizer = normalizer_type.from_rewards(
         rewards=rollouts.map(lambda x: x.metrics.actual_rewards)
     )
 
@@ -213,6 +218,7 @@ def single_iteration(
         rollout_buffer_metrics=rollout_buffer_metrics,
         online_training_data=online_training_data,
         normalizer_type=normalizer_type,
+        target_reward=target_reward,
     )
 
 
@@ -265,21 +271,21 @@ def main():
     # Starting policy model
     # babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17 150k samples
     policy_model = OpenaiInferenceConfig(
-        model="babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17",
+        model="babbage:ft-leadiq:thejaminator-online-assistant-policy-2023-01-14-08-43-41",
         top_p=1.0,
         temperature=1.0,
-        max_tokens=800,
+        max_tokens=600,
         stop=END_TOKEN,
     )
     # Get the target reward
     target_reward = HelpfulHarmlessReward(helpful=0.7, harmless=0.7)
     # Parameters to tweak
-    normalizer_type = DoNothingNormalizer
+    normalizer_type: Type[DoNothingNormalizer] = DoNothingNormalizer
     n_iteration: int = 1
-    prompt_sample_count = 32
+    prompt_sample_count = 128
     rollouts_per_prompt = 8
     all_dialogues: Slist[AnthropicRawFormat] = get_online_prompts()
-    max_iterations = 10
+    max_iterations = 20
     while True:
         if n_iteration > max_iterations:
             should_continue = cli_input_list(
@@ -289,7 +295,11 @@ def main():
             if not should_continue:
                 break
             else:
-                max_iterations += 10
+                number_more_iterations:int = cli_input_list(
+                    options=[1, 2, 3, 4, 5, 10, 20, 50, 100],
+                    start_text=f"How many more iterations?",
+                )
+                max_iterations += number_more_iterations
         print(f"Starting iteration {n_iteration}")
         # Sample dialogues
         sampled_dialogues: Slist[AnthropicRawFormat] = all_dialogues.sample(
@@ -306,7 +316,7 @@ def main():
             # Lower than 0.1 because of scheduler?
             learning_rate_multiplier=0.05,
             prompt_loss_weight=0.0,
-            batch_size=32,
+            batch_size=64,
         )
         # Single iteration
         new_model_id = single_iteration(

@@ -1,10 +1,15 @@
 from concurrent.futures import ThreadPoolExecutor
+from typing import Type
 
 from neptune.new import Run
 from pydantic import BaseModel
-from slist import Slist
+from slist import Slist, identity
 
-from api.logged_fine_tune import logged_fine_tune
+from api.logged_fine_tune import (
+    logged_fine_tune,
+    AlwaysContinueHandler,
+    DefaultCLIHandler,
+)
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
 from api.redis_cache import redis_cache
@@ -16,9 +21,13 @@ from parsing.parse_raw import AnthropicRawFormat
 from settings import OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
-    RewardAtBottomFormatter, RewardAtTopFormatter, DuplicateRewardAtBottomFormatter,
+    RewardAtBottomFormatter,
+    RewardAtTopFormatter,
+    DuplicateRewardAtBottomFormatter,
+    RewardAtBottomTimes100Formatter,
 )
 from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
+from train.reward_normalizer import RewardNormalizer, StandardScaleNormalizer
 from train.separators import END_TOKEN
 from train.train_joint_reward_model import get_harmless_helpful_train
 from retry import retry
@@ -52,6 +61,8 @@ def train(
     policy_formatter: PolicyPromptFormatter,
     pair_limit: int,
     finetune_params: FineTuneParams,
+    chunk_size: int,
+    normalizer_type: Type[RewardNormalizer],
 ) -> ModelId:
     # Get the prompts
     raw_prompts: Slist[AnthropicRawFormat] = (
@@ -93,24 +104,100 @@ def train(
         get_rewards_and_count,
         executor=thread_pool,
     ).flatten_list()
+    # Print maximum and minimum rewards
+    print(
+        f"Maximum helpful reward: {prompt_with_rewards.map(lambda x: x.target_reward.helpful).sort_by(identity, reverse=True).first_or_raise()}"
+    )
+    print(
+        f"Minimum helpful reward: {prompt_with_rewards.map(lambda x: x.target_reward.helpful).sort_by(identity).first_or_raise()}"
+    )
+    # 95th percentile
+    ninety_fifth_percentile_helpful = (
+        prompt_with_rewards.map(lambda x: x.target_reward.helpful)
+        .sort_by(identity)
+        .take(int(len(prompt_with_rewards) * 0.95))
+        .last_or_raise()
+    )
+    print(f"95th percentile helpful reward: {ninety_fifth_percentile_helpful}")
+    # 5th percentile
+    fifth_percentile_helpful = (
+        prompt_with_rewards.map(lambda x: x.target_reward.helpful)
+        .sort_by(identity)
+        .take(int(len(prompt_with_rewards) * 0.05))
+        .last_or_raise()
+    )
+    print(f"5th percentile helpful reward: {fifth_percentile_helpful}")
+
+    print(
+        f"Maximum harmless reward: {prompt_with_rewards.map(lambda x: x.target_reward.harmless).sort_by(identity, reverse=True).first_or_raise()}"
+    )
+    print(
+        f"Minimum harmless reward: {prompt_with_rewards.map(lambda x: x.target_reward.harmless).sort_by(identity).first_or_raise()}"
+    )
+
+    # Create normalizer
+    normalizer: RewardNormalizer = normalizer_type.from_rewards(
+        rewards=prompt_with_rewards.map(lambda x: x.target_reward)
+    )
+
+    def replace_with_normalized(
+        dialogue_with_reward: DialogueWithReward,
+    ) -> DialogueWithReward:
+        return DialogueWithReward(
+            dialogue=dialogue_with_reward.dialogue,
+            target_reward=normalizer.normalize_reward(
+                dialogue_with_reward.target_reward
+            ),
+        )
+
+    # Normalize the rewards
+    prompt_with_normalized_rewards: Slist[DialogueWithReward] = prompt_with_rewards.map(
+        replace_with_normalized
+    )
+
     # Convert to prompt completions
-    prompt_completions: Slist[PromptCompletion] = prompt_with_rewards.map(
+    prompt_completions: Slist[PromptCompletion] = prompt_with_normalized_rewards.map(
         lambda x: policy_formatter.dialogue_reward_to_prompt_completion(
             x
         ).to_prompt_completion()
     )
     # add formatter
-    def neptune_pretrain_callable(run: Run) -> None:
-        run["policy_formatter"] = policy_formatter.name
-    model_id = logged_fine_tune(
-        train=prompt_completions,
-        params=finetune_params,
-        project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
-        completion_start_token="",
-        completion_end_token=END_TOKEN,
-        neptune_pretrain_callable=neptune_pretrain_callable,
+    # Split the prompts into chunks of 25k examples
+    # This gets around the limitation that OpenAI doesn't save snapshots of your model
+    training_chunks: Slist[Slist[PromptCompletion]] = prompt_completions.grouped(
+        chunk_size
     )
-    return model_id
+    updated_fine_tune_params: FineTuneParams = finetune_params.copy()
+    print(f"Normalizer: {normalizer.to_dict()}")
+    for idx, chunk in training_chunks.enumerated():
+
+        def neptune_pretrain_callable(run: Run) -> None:
+            run["policy_formatter"] = policy_formatter.name
+            run["train/total_train_examples"] = len(prompt_completions)
+            run["train/chunk_number"] = idx + 1
+            run["train/helpful_model"] = helpful_model
+            run["train/harmless_model"] = harmless_model
+            run["train/normalizer"] = normalizer.to_dict()
+
+        if idx > 0:
+            updated_fine_tune_params.learning_rate_multiplier = (
+                finetune_params.learning_rate_multiplier
+            ) * 1
+        print(f"Training chunk {idx + 1} of {len(training_chunks)}")
+        new_model_id = logged_fine_tune(
+            train=chunk,
+            params=updated_fine_tune_params,
+            project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
+            completion_start_token="",
+            completion_end_token=END_TOKEN,
+            neptune_pretrain_callable=neptune_pretrain_callable,
+            should_continue_handler=AlwaysContinueHandler()
+            if idx > 0
+            else DefaultCLIHandler(),
+        )
+        # after training, update updated_fine_tune_params
+        updated_fine_tune_params.model = new_model_id
+    return ModelId(updated_fine_tune_params.model)
 
 
 if __name__ == "__main__":
@@ -123,7 +210,14 @@ if __name__ == "__main__":
         batch_size=32,
         prompt_loss_weight=0.1,
     )
+    normalizer: Type[StandardScaleNormalizer] = StandardScaleNormalizer
     # Run the main function
     # Try 1000, 10000, 25000, 50000, 75000
-    train(policy_formatter, pair_limit=75000, finetune_params=finetune_params)
+    train(
+        policy_formatter,
+        pair_limit=75000,
+        finetune_params=finetune_params,
+        chunk_size=99999999,
+        normalizer_type=normalizer,
+    )
     # export PYTHONPATH=.; python train/train_offline.py

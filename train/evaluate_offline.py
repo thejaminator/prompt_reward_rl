@@ -12,7 +12,7 @@ from neptune.new.types import File
 
 import pandas as pd
 import seaborn as sns
-from openai.error import RateLimitError, APIConnectionError
+from openai.error import RateLimitError, APIConnectionError, Timeout
 from pydantic import BaseModel
 from retry import retry
 from scipy.stats import pearsonr, _result_classes
@@ -38,7 +38,7 @@ from settings import (
     OPENAI_KEY,
     NEPTUNE_KEY,
     OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
-    MODEL_ID_NEPTUNE_KEY,
+    MODEL_ID_NEPTUNE_KEY, BEHAVIORAL_CLONING_NEPTUNE_PROJECT, ONLINE_POLICY_NEPTUNE_PROJECT,
 )
 from train.assign_rewards import (
     assign_random_separate_target_reward,
@@ -53,7 +53,7 @@ from train.evaluate_reward_model import (
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
-    RewardAtBottomFormatter,
+    RewardAtBottomFormatter, NoRewardFormatter, RewardAtBottomTimes100Formatter,
 )
 from train.reward_models import DialogueWithReward, HelpfulHarmlessReward
 from train.separators import END_TOKEN
@@ -84,7 +84,7 @@ class EvaluationWithGPTResponse(BaseModel):
     full_response: GPTFullResponse
 
 
-@retry(exceptions=(RateLimitError, APIConnectionError), tries=5, delay=20)
+@retry(exceptions=(RateLimitError, APIConnectionError, Timeout), tries=5, delay=20)
 def get_policy_single_evaluation(
     policy_prompt_info: PolicyPromptInfo,
     policy_model: OpenaiInferenceConfig,
@@ -521,10 +521,11 @@ def get_openai_model_from_neptune(
 
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
-    run_id = "OF-8"
+    run_id = "ON-56"
+    neptune_project= ONLINE_POLICY_NEPTUNE_PROJECT
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
-        neptune_project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
+        neptune_project_name=neptune_project,
         neptune_run_id=run_id,
     )
     policy_config = OpenaiInferenceConfig(
@@ -559,7 +560,7 @@ if __name__ == "__main__":
     log_results_to_neptune(
         scatter_plots=scatter_plots,
         neptune_api_key=NEPTUNE_KEY,
-        neptune_project_name=OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
+        neptune_project_name=neptune_project,
         neptune_run_id=run_id,
         policy_config=policy_config,
         helpful_model=helpful_model,

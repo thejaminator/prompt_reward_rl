@@ -10,8 +10,9 @@ from train.reward_models import HelpfulHarmlessReward
 
 
 class RewardNormalizer(ABC):
+    @staticmethod
     @abstractmethod
-    def __init__(self, rewards: Slist[HelpfulHarmlessReward]):
+    def from_rewards(rewards: Slist[HelpfulHarmlessReward]) -> "RewardNormalizer":
         raise NotImplementedError
 
     @abstractmethod
@@ -27,19 +28,38 @@ class RewardNormalizer(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def from_dict(self, d: dict[str, Any]) -> "RewardNormalizer":
+    def from_dict(self, _dict: dict[str, Any]) -> "RewardNormalizer":
         raise NotImplementedError
 
 
 class MinMaxNormalizer(RewardNormalizer):
     # A normalizer that will normalize the rewards to be between 0 and 1
-    def __init__(self, rewards: Slist[HelpfulHarmlessReward]):
+    def __init__(
+        self,
+        harmless_min: float,
+        harmless_max: float,
+        helpful_min: float,
+        helpful_max: float,
+    ):
+        self.harmless_min = harmless_min
+        self.harmless_max = harmless_max
+        self.helpful_min = helpful_min
+        self.helpful_max = helpful_max
+
+    @staticmethod
+    def from_rewards(rewards: Slist[HelpfulHarmlessReward])-> "MinMaxNormalizer":
         harmless_rewards: Slist[float] = rewards.map(lambda r: r.harmless)
         helpful_rewards: Slist[float] = rewards.map(lambda r: r.helpful)
-        self.harmless_min: float = min(harmless_rewards)
-        self.harmless_max: float = max(harmless_rewards)
-        self.helpful_min: float = min(helpful_rewards)
-        self.helpful_max: float = max(helpful_rewards)
+        harmless_min: float = min(harmless_rewards)
+        harmless_max: float = max(harmless_rewards)
+        helpful_min: float = min(helpful_rewards)
+        helpful_max: float = max(helpful_rewards)
+        return MinMaxNormalizer(
+            harmless_min=harmless_min,
+            harmless_max=harmless_max,
+            helpful_min=helpful_min,
+            helpful_max=helpful_max,
+        )
 
     def normalize_reward(self, reward: HelpfulHarmlessReward) -> HelpfulHarmlessReward:
         return HelpfulHarmlessReward(
@@ -62,29 +82,35 @@ class MinMaxNormalizer(RewardNormalizer):
             "helpful_max": self.helpful_max,
         }
 
-    def from_dict(self, d: dict[str, Any]) -> "MinMaxNormalizer":
-        normalizer = MinMaxNormalizer(
-            rewards=Slist(),
+    def from_dict(self, _dict: dict[str, Any]) -> "MinMaxNormalizer":
+        harmless_min = _dict["harmless_min"]
+        harmless_max = _dict["harmless_max"]
+        helpful_min = _dict["helpful_min"]
+        helpful_max = _dict["helpful_max"]
+        return MinMaxNormalizer(
+            harmless_min=harmless_min,
+            harmless_max=harmless_max,
+            helpful_min=helpful_min,
+            helpful_max=helpful_max,
         )
-        normalizer.harmless_min = d["harmless_min"]
-        normalizer.harmless_max = d["harmless_max"]
-        normalizer.helpful_min = d["helpful_min"]
-        normalizer.helpful_max = d["helpful_max"]
-        return normalizer
 
 
 class DoNothingNormalizer(RewardNormalizer):
-    def __init__(self, rewards: Slist[HelpfulHarmlessReward]):
+    def __init__(self):
         pass
 
+    @staticmethod
+    def from_rewards(rewards: Slist[HelpfulHarmlessReward]) -> "DoNothingNormalizer":
+        return DoNothingNormalizer()
     def normalize_reward(self, reward: HelpfulHarmlessReward) -> HelpfulHarmlessReward:
         return reward
 
     def to_dict(self) -> dict[str, Any]:
         return {"name": self.name()}
 
-    def from_dict(self, d: dict[str, Any]) -> "DoNothingNormalizer":
-        return DoNothingNormalizer(rewards=Slist())
+    def from_dict(self, _dict: dict[str, Any]) -> "DoNothingNormalizer":
+        return DoNothingNormalizer()
+
 
 def assert_not_none(value: Optional[A], message: str = "Value should not be None") -> A:
     assert value is not None, message
@@ -92,15 +118,32 @@ def assert_not_none(value: Optional[A], message: str = "Value should not be None
 
 
 class StandardScaleNormalizer(RewardNormalizer):
-    def __init__(self, rewards: Slist[HelpfulHarmlessReward]):
+    def __init__(
+        self,
+        harmless_mean: float,
+        harmless_std: float,
+        helpful_mean: float,
+        helpful_std: float,
+    ):
+        self.harmless_mean = harmless_mean
+        self.harmless_std = harmless_std
+        self.helpful_mean = helpful_mean
+        self.helpful_std = helpful_std
+
+    @staticmethod
+    def from_rewards(rewards: Slist[HelpfulHarmlessReward]):
         harmless_rewards: Slist[float] = rewards.map(lambda r: r.harmless)
         helpful_rewards: Slist[float] = rewards.map(lambda r: r.helpful)
-        self.harmless_mean: float = assert_not_none(harmless_rewards.average())
-        self.harmless_std: float = assert_not_none(
-            harmless_rewards.standard_deviation()
+        harmless_mean: float = assert_not_none(harmless_rewards.average())
+        harmless_std: float = assert_not_none(harmless_rewards.standard_deviation())
+        helpful_mean: float = assert_not_none(helpful_rewards.average())
+        helpful_std: float = assert_not_none(helpful_rewards.standard_deviation())
+        return StandardScaleNormalizer(
+            harmless_mean=harmless_mean,
+            harmless_std=harmless_std,
+            helpful_mean=helpful_mean,
+            helpful_std=helpful_std,
         )
-        self.helpful_mean: float = assert_not_none(helpful_rewards.average())
-        self.helpful_std: float = assert_not_none(helpful_rewards.standard_deviation())
 
     def normalize_reward(self, reward: HelpfulHarmlessReward) -> HelpfulHarmlessReward:
         return HelpfulHarmlessReward(
@@ -125,14 +168,16 @@ class StandardScaleNormalizer(RewardNormalizer):
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "StandardScaleNormalizer":
-        normalizer = StandardScaleNormalizer(
-            rewards=Slist(),
+        harmless_mean = d["harmless_mean"]
+        harmless_std = d["harmless_std"]
+        helpful_mean = d["helpful_mean"]
+        helpful_std = d["helpful_std"]
+        return StandardScaleNormalizer(
+            harmless_mean=harmless_mean,
+            harmless_std=harmless_std,
+            helpful_mean=helpful_mean,
+            helpful_std=helpful_std,
         )
-        normalizer.harmless_mean = d["harmless_mean"]
-        normalizer.harmless_std = d["harmless_std"]
-        normalizer.helpful_mean = d["helpful_mean"]
-        normalizer.helpful_std = d["helpful_std"]
-        return normalizer
 
 
 class OnlineTrainingData(BaseModel):
