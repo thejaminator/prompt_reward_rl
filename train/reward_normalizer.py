@@ -26,12 +26,12 @@ class RewardNormalizer(ABC):
 class MinMaxNormalizer(RewardNormalizer):
     # A normalizer that will normalize the rewards to be between 0 and 1
     def __init__(self, rewards: Slist[HelpfulHarmlessReward]):
-        self.harmless_rewards: Slist[float] = rewards.map(lambda r: r.harmless)
-        self.helpful_rewards: Slist[float] = rewards.map(lambda r: r.helpful)
-        self.harmless_min: float = min(self.harmless_rewards)
-        self.harmless_max: float = max(self.harmless_rewards)
-        self.helpful_min: float = min(self.helpful_rewards)
-        self.helpful_max: float = max(self.helpful_rewards)
+        harmless_rewards: Slist[float] = rewards.map(lambda r: r.harmless)
+        helpful_rewards: Slist[float] = rewards.map(lambda r: r.helpful)
+        self.harmless_min: float = min(harmless_rewards)
+        self.harmless_max: float = max(harmless_rewards)
+        self.helpful_min: float = min(helpful_rewards)
+        self.helpful_max: float = max(helpful_rewards)
 
     def normalize_reward(self, reward: HelpfulHarmlessReward) -> HelpfulHarmlessReward:
         return HelpfulHarmlessReward(
