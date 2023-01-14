@@ -31,7 +31,7 @@ from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
 from train.reward_normalizer import (
     RewardNormalizer,
     MinMaxNormalizer,
-    OnlineTrainingData,
+    OnlineTrainingData, DoNothingNormalizer,
 )
 from train.separators import END_TOKEN
 
@@ -119,6 +119,7 @@ def finetune_online_with_neptune(
     rollout_buffer_metrics: RolloutBufferMetrics,
     normalizer_type: Type[RewardNormalizer],
     online_training_data: Slist[OnlineTrainingData],
+    target_reward: HelpfulHarmlessReward,
 ) -> ModelId:
     # Fine-tune the model with the prompt completions
 
@@ -140,6 +141,9 @@ def finetune_online_with_neptune(
         run[f"online_metrics/rollouts_table"].upload(File.as_html(rollouts_df))
         # normalizer name
         run["online_metrics/normalizer_type"] = normalizer_type.name()
+        # target rewards
+        run["online_metrics/target_helpful"] = target_reward.helpful
+        run["online_metrics/target_harmless"] = target_reward.harmless
 
     return logged_fine_tune(
         train=online_training_data.map(lambda x: x.to_prompt_completion()),
@@ -261,16 +265,16 @@ def main():
     # Starting policy model
     # babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17 150k samples
     policy_model = OpenaiInferenceConfig(
-        model="babbage:ft-leadiq:thejaminator-online-assistant-policy-2023-01-02-18-00-00",
+        model="babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17",
         top_p=1.0,
         temperature=1.0,
-        max_tokens=400,
+        max_tokens=800,
         stop=END_TOKEN,
     )
     # Get the target reward
-    target_reward = HelpfulHarmlessReward(helpful=0.99, harmless=0.99)
+    target_reward = HelpfulHarmlessReward(helpful=0.7, harmless=0.7)
     # Parameters to tweak
-    normalizer_type = MinMaxNormalizer
+    normalizer_type = DoNothingNormalizer
     n_iteration: int = 1
     prompt_sample_count = 32
     rollouts_per_prompt = 8
