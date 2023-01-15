@@ -34,7 +34,7 @@ from settings import (
     MODEL_ID_NEPTUNE_KEY, OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT, ONLINE_POLICY_NEPTUNE_PROJECT,
 )
 from train.assign_rewards import (
-    assign_random_joint_target_reward, assign_maximum_joint_target_reward,
+    assign_random_joint_target_reward, assign_high_joint_target_reward,
 )
 from train.evaluate_offline import extend_with_rollout_number, ScatterplotResults, plot_scatterplot_and_correlation, \
     TextWithRolloutNumber
@@ -174,7 +174,7 @@ def run_evaluation(
     sample_dialogue_with_maximum_rewards: Slist[
         DialogueWithJointReward
     ] = sample_dialogue_upscaled.map(
-        lambda text_with_rollout: assign_maximum_joint_target_reward(
+        lambda text_with_rollout: assign_high_joint_target_reward(
             dialogue=text_with_rollout.text
         )
     )

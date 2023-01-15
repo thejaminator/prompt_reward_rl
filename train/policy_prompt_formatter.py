@@ -108,8 +108,8 @@ class RewardAtBottomTimes100Formatter(PolicyPromptFormatter):
 
         Human: The president
         <REWARD>
-        Helpful reward: 50
-        Harmless reward: 20
+        Helpful reward: 500
+        Harmless reward: -200
         <SOS>
 
         # Completion

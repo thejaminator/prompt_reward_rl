@@ -38,11 +38,11 @@ from settings import (
     OPENAI_KEY,
     NEPTUNE_KEY,
     OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
-    MODEL_ID_NEPTUNE_KEY, BEHAVIORAL_CLONING_NEPTUNE_PROJECT, ONLINE_POLICY_NEPTUNE_PROJECT,
-)
+    MODEL_ID_NEPTUNE_KEY,
+    REWARD_NORMALIZER_NEPTUNE_KEY, )
 from train.assign_rewards import (
     assign_random_separate_target_reward,
-    assign_maximum_separate_target_reward,
+    assign_high_separate_target_reward,
 )
 from train.evaluate_reward_model import (
     TestDataset,
@@ -50,33 +50,15 @@ from train.evaluate_reward_model import (
     get_harmless_test,
     get_helpful_test,
 )
+from train.metrics.reward_metric import HelpfulHarmlessEvaluationMetric
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
-    RewardAtBottomFormatter, NoRewardFormatter, RewardAtBottomTimes100Formatter,
+    RewardAtBottomFormatter,
 )
-from train.reward_models import DialogueWithReward, HelpfulHarmlessReward
+from train.reward_models import DialogueWithReward
+from train.reward_normalizer import RewardNormalizer
 from train.separators import END_TOKEN
-
-
-class HelpfulHarmlessEvaluationMetric(BaseModel):
-    policy_prompt: str
-    # prompt given to the reward model for determining the actual reward
-    reward_prompt: str
-    completion: str
-    # Prompt + completion, without the reward
-    completed_dialogue: str
-    target_helpful: float
-    actual_helpful: float
-    target_harmless: float
-    actual_harmless: float
-
-    @property
-    def actual_rewards(self) -> HelpfulHarmlessReward:
-        return HelpfulHarmlessReward(
-            helpful=self.actual_helpful,
-            harmless=self.actual_harmless,
-        )
 
 
 class EvaluationWithGPTResponse(BaseModel):
@@ -86,28 +68,38 @@ class EvaluationWithGPTResponse(BaseModel):
 
 @retry(exceptions=(RateLimitError, APIConnectionError, Timeout), tries=5, delay=20)
 def get_policy_single_evaluation(
-    policy_prompt_info: PolicyPromptInfo,
+    dialogue_with_reward: DialogueWithReward,
     policy_model: OpenaiInferenceConfig,
     helpful_model: ModelId,
     harmless_model: ModelId,
+    normalizer: RewardNormalizer,
+    formatter: PolicyPromptFormatter,
     cached: bool = True,
 ) -> EvaluationWithGPTResponse:
-    policy_prompt = policy_prompt_info.to_prompt_completion().prompt
+    # Use policy_formatter to format the prompts
+    normalized_policy_prompt = dialogue_with_reward.copy()
+    normalized_policy_prompt.target_reward = normalizer.normalize_reward(
+        normalized_policy_prompt.target_reward
+    )
+    formatted: PolicyPromptInfo = policy_formatter.dialogue_reward_to_prompt_completion(normalized_policy_prompt)
+
+
+    policy_prompt = formatted.to_prompt_completion().prompt
     # rollout the policy
     policy_completion: GPTFullResponse = (
         cached_get_openai_completion(
-            prompt=policy_prompt_info.to_prompt_completion().prompt, config=policy_model
+            prompt=policy_prompt, config=policy_model
         )
         if cached
         else get_openai_completion(
-            prompt=policy_prompt_info.to_prompt_completion().prompt, config=policy_model
+            prompt=policy_prompt, config=policy_model
         )
     )
     # You need to get the prompt that does not have the target reward, and add the completion
     dialogue = (
-        policy_prompt_info.dialogue_without_reward_without_completion
-        + "\n\n"
-        + policy_completion.completion
+            formatted.dialogue_without_reward_without_completion
+            + "\n\n"
+            + policy_completion.completion
     )
     formatted_reward_prompt: PromptForRewardModel = format_dialogue_into_reward_prompt(
         dialogue
@@ -123,9 +115,11 @@ def get_policy_single_evaluation(
         reward_prompt=formatted_reward_prompt,
         completion=policy_completion.completion,
         completed_dialogue=dialogue,
-        target_helpful=policy_prompt_info.target_reward.helpful,
+        target_helpful=dialogue_with_reward.target_reward.helpful,
+        normalized_target_helpful=normalized_policy_prompt.target_reward.helpful,
         actual_helpful=actual_helpful_reward,
-        target_harmless=policy_prompt_info.target_reward.harmless,
+        target_harmless=dialogue_with_reward.target_reward.harmless,
+        normalized_target_harmless=normalized_policy_prompt.target_reward.harmless,
         actual_harmless=actual_harmless_reward,
     )
     return EvaluationWithGPTResponse(
@@ -222,6 +216,7 @@ def run_evaluation(
     test_dataset: TestDataset,
     rollouts_per_prompt: int,
     policy_formatter: PolicyPromptFormatter,
+    normalizer: RewardNormalizer,
 ) -> EvaluationResults:
     threadpool = ThreadPoolExecutor(max_workers=20)
     set_openai_key(openai_api_key)
@@ -252,22 +247,18 @@ def run_evaluation(
             rollout_number=text_with_rollout.rollout_number,
         )
     )
-    # Use policy_formatter to format the prompts
-    formatted_random_prompts: Slist[
-        PolicyPromptInfo
-    ] = sample_dialogue_with_random_rewards.map(
-        lambda x: policy_formatter.dialogue_reward_to_prompt_completion(x)
-    )
 
     # Rollout the prompts to get the completions, and get the actual rewards
     evaluated_random_prompts: Slist[
         HelpfulHarmlessEvaluationMetric
-    ] = formatted_random_prompts.par_map(
+    ] = sample_dialogue_with_random_rewards.par_map(
         lambda x: get_policy_single_evaluation(
-            policy_prompt_info=x,
+            dialogue_with_reward=x,
             policy_model=policy_model,
+            formatter=policy_formatter,
             helpful_model=helpful_model,
             harmless_model=harmless_model,
+            normalizer=normalizer,
         ).metrics,
         executor=threadpool,
     )
@@ -276,23 +267,20 @@ def run_evaluation(
     sample_dialogue_with_maximum_rewards: Slist[
         DialogueWithReward
     ] = sample_dialogue_upscaled.map(
-        lambda text_with_rollout: assign_maximum_separate_target_reward(
+        lambda text_with_rollout: assign_high_separate_target_reward(
             dialogue=text_with_rollout.text
         )
     )
-    formatted_maximum_prompts: Slist[
-        PolicyPromptInfo
-    ] = sample_dialogue_with_maximum_rewards.map(
-        lambda x: policy_formatter.dialogue_reward_to_prompt_completion(x)
-    )
     evaluated_maximum_prompts: Slist[
         HelpfulHarmlessEvaluationMetric
-    ] = formatted_maximum_prompts.par_map(
+    ] = sample_dialogue_with_maximum_rewards.par_map(
         lambda x: get_policy_single_evaluation(
-            policy_prompt_info=x,
+            dialogue_with_reward=x,
             policy_model=policy_model,
             helpful_model=helpful_model,
             harmless_model=harmless_model,
+            normalizer=normalizer,
+            formatter=policy_formatter,
         ).metrics,
         executor=threadpool,
     )
@@ -519,11 +507,34 @@ def get_openai_model_from_neptune(
     return model_id
 
 
+def get_normalizer_from_neptune(
+    neptune_api_key: str,
+    neptune_project_name: str,
+    neptune_run_id: str,
+) -> RewardNormalizer:
+    run = get_neptune_run(
+        neptune_api_key=neptune_api_key,
+        neptune_project_name=neptune_project_name,
+        neptune_run_id=neptune_run_id,
+    )
+    normalizer_dict = run[REWARD_NORMALIZER_NEPTUNE_KEY].fetch()
+    assert normalizer_dict is not None, "Normalizer is None"
+    normalizer = RewardNormalizer.create_from_dict(normalizer_dict)
+    run.stop()
+    return normalizer
+
+
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
-    run_id = "ON-56"
-    neptune_project= ONLINE_POLICY_NEPTUNE_PROJECT
+    run_id = "OF-53"
+    neptune_project = OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT
     policy_model_id = get_openai_model_from_neptune(
+        neptune_api_key=NEPTUNE_KEY,
+        neptune_project_name=neptune_project,
+        neptune_run_id=run_id,
+    )
+    # Optionally retrieve the normalizer from neptune
+    normalizer = get_normalizer_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=neptune_project,
         neptune_run_id=run_id,
@@ -549,6 +560,7 @@ if __name__ == "__main__":
         policy_formatter=policy_formatter,
         helpful_model=helpful_model,
         harmless_model=harmless_model,
+        normalizer=normalizer,
     )
 
     # plot the results

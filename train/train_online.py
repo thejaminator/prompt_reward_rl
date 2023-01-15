@@ -20,9 +20,9 @@ from settings import ONLINE_POLICY_NEPTUNE_PROJECT
 from train.assign_rewards import assign_separate_target_reward
 from train.evaluate_offline import (
     get_policy_single_evaluation,
-    HelpfulHarmlessEvaluationMetric,
     EvaluationWithGPTResponse,
 )
+from train.metrics.reward_metric import HelpfulHarmlessEvaluationMetric
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
@@ -50,6 +50,7 @@ def rollout_and_evaluate(
     target_reward: HelpfulHarmlessReward,
     helpful_model: ModelId,
     harmless_model: ModelId,
+    normalizer: RewardNormalizer,
 ) -> Optional[EvaluationWithGPTResponse]:
     # do the same thing, but using the maximum target reward
     dialogue_with_maximum_reward: DialogueWithReward = assign_separate_target_reward(
@@ -57,18 +58,17 @@ def rollout_and_evaluate(
         helpful_target=target_reward.helpful,
         harmless_target=target_reward.harmless,
     )
-    formatted_maximum_reward: PolicyPromptInfo = (
-        formatter.dialogue_reward_to_prompt_completion(dialogue_with_maximum_reward)
-    )
     # Rollout the prompt using the policy model, with the target reward
     # This also evaluates the rollout and gets the actual reward
     try:
         rollout: EvaluationWithGPTResponse = get_policy_single_evaluation(
-            policy_prompt_info=formatted_maximum_reward,
+            dialogue_with_reward=dialogue_with_maximum_reward,
             policy_model=policy_model,
             helpful_model=helpful_model,
             harmless_model=harmless_model,
             cached=False,  # Don't cache this since we have multiple rollouts, all with the same target temperature
+            normalizer=normalizer,
+            formatter=formatter,
         )
     except InvalidRequestError as e:
         print(f"Invalid request error, probably token limit: {e}")
@@ -188,6 +188,7 @@ def single_iteration(
             formatter=formatter,
             helpful_model=helpful_model,
             harmless_model=harmless_model,
+            normalizer=DoNothingNormalizer()
         ),
         executor=threadpool,
     ).flatten_option()

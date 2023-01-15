@@ -18,7 +18,7 @@ from evaluate.classification import (
     get_positive_class_proba,
 )
 from parsing.parse_raw import AnthropicRawFormat
-from settings import OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT
+from settings import OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT, REWARD_NORMALIZER_NEPTUNE_KEY
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     RewardAtBottomFormatter,
@@ -33,6 +33,16 @@ from train.train_joint_reward_model import get_harmless_helpful_train
 from retry import retry
 from openai.error import RateLimitError
 
+
+def replace_with_normalized(
+        dialogue_with_reward: DialogueWithReward, normalizer: RewardNormalizer
+) -> DialogueWithReward:
+    return DialogueWithReward(
+        dialogue=dialogue_with_reward.dialogue,
+        target_reward=normalizer.normalize_reward(
+            dialogue_with_reward.target_reward
+        ),
+    )
 
 @redis_cache(decode_dict=DialogueWithReward)
 @retry(exceptions=RateLimitError, tries=5, delay=20)
@@ -140,19 +150,11 @@ def train(
         rewards=prompt_with_rewards.map(lambda x: x.target_reward)
     )
 
-    def replace_with_normalized(
-        dialogue_with_reward: DialogueWithReward,
-    ) -> DialogueWithReward:
-        return DialogueWithReward(
-            dialogue=dialogue_with_reward.dialogue,
-            target_reward=normalizer.normalize_reward(
-                dialogue_with_reward.target_reward
-            ),
-        )
+
 
     # Normalize the rewards
     prompt_with_normalized_rewards: Slist[DialogueWithReward] = prompt_with_rewards.map(
-        replace_with_normalized
+        lambda x: replace_with_normalized(x, normalizer=normalizer)
     )
 
     # Convert to prompt completions
@@ -177,7 +179,7 @@ def train(
             run["train/chunk_number"] = idx + 1
             run["train/helpful_model"] = helpful_model
             run["train/harmless_model"] = harmless_model
-            run["train/normalizer"] = normalizer.to_dict()
+            run[REWARD_NORMALIZER_NEPTUNE_KEY] = normalizer.to_dict()
 
         if idx > 0:
             updated_fine_tune_params.learning_rate_multiplier = (

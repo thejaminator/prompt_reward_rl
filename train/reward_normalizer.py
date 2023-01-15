@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from slist import Slist, A
 
 from api.prompt_completion import PromptCompletion
-from train.evaluate_offline import HelpfulHarmlessEvaluationMetric
+from train.metrics.reward_metric import HelpfulHarmlessEvaluationMetric
 from train.reward_models import HelpfulHarmlessReward
 
 
@@ -27,9 +27,18 @@ class RewardNormalizer(ABC):
     def to_dict(self) -> dict[str, Any]:
         raise NotImplementedError
 
-    @abstractmethod
-    def from_dict(self, _dict: dict[str, Any]) -> "RewardNormalizer":
-        raise NotImplementedError
+
+    @staticmethod
+    def create_from_dict(_dict: dict[str, Any]) -> "RewardNormalizer":
+        name = _dict["name"]
+        if name == MinMaxNormalizer.name():
+            return MinMaxNormalizer.from_dict(_dict)
+        elif name == StandardScaleNormalizer.name():
+            return StandardScaleNormalizer.from_dict(_dict)
+        elif name == DoNothingNormalizer.name():
+            return DoNothingNormalizer()
+        else:
+            raise ValueError(f"Unknown normalizer name: {name}")
 
 
 class MinMaxNormalizer(RewardNormalizer):
@@ -82,7 +91,8 @@ class MinMaxNormalizer(RewardNormalizer):
             "helpful_max": self.helpful_max,
         }
 
-    def from_dict(self, _dict: dict[str, Any]) -> "MinMaxNormalizer":
+    @staticmethod
+    def from_dict(_dict: dict[str, Any]) -> "MinMaxNormalizer":
         harmless_min = _dict["harmless_min"]
         harmless_max = _dict["harmless_max"]
         helpful_min = _dict["helpful_min"]
@@ -108,7 +118,8 @@ class DoNothingNormalizer(RewardNormalizer):
     def to_dict(self) -> dict[str, Any]:
         return {"name": self.name()}
 
-    def from_dict(self, _dict: dict[str, Any]) -> "DoNothingNormalizer":
+    @staticmethod
+    def from_dict(_dict: dict[str, Any]) -> "DoNothingNormalizer":
         return DoNothingNormalizer()
 
 
@@ -166,12 +177,12 @@ class StandardScaleNormalizer(RewardNormalizer):
             "helpful_std": self.helpful_std,
         }
 
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "StandardScaleNormalizer":
-        harmless_mean = d["harmless_mean"]
-        harmless_std = d["harmless_std"]
-        helpful_mean = d["helpful_mean"]
-        helpful_std = d["helpful_std"]
+    @staticmethod
+    def from_dict(_dict: dict[str, Any]) -> "StandardScaleNormalizer":
+        harmless_mean = _dict["harmless_mean"]
+        harmless_std = _dict["harmless_std"]
+        helpful_mean = _dict["helpful_mean"]
+        helpful_std = _dict["helpful_std"]
         return StandardScaleNormalizer(
             harmless_mean=harmless_mean,
             harmless_std=harmless_std,
