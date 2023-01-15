@@ -7,7 +7,6 @@ from matplotlib.figure import Figure
 
 import neptune
 import neptune.new
-from neptune.new import Run
 from neptune.new.types import File
 
 import pandas as pd
@@ -38,8 +37,7 @@ from settings import (
     OPENAI_KEY,
     NEPTUNE_KEY,
     OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
-    MODEL_ID_NEPTUNE_KEY,
-    REWARD_NORMALIZER_NEPTUNE_KEY, )
+)
 from train.assign_rewards import (
     assign_random_separate_target_reward,
     assign_high_separate_target_reward,
@@ -51,6 +49,8 @@ from train.evaluate_reward_model import (
     get_helpful_test,
 )
 from train.metrics.reward_metric import HelpfulHarmlessEvaluationMetric
+from train.neptune.runs import get_openai_model_from_neptune
+from train.normalizer.reward_normalizer import get_separate_normalizer_from_neptune
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
@@ -478,52 +478,6 @@ def log_results_to_neptune(
         run.stop()
 
 
-def get_neptune_run(
-    neptune_api_key: str,
-    neptune_project_name: str,
-    neptune_run_id: str,
-) -> Run:
-    run = neptune.new.init_run(
-        with_id=neptune_run_id,
-        project=f"{neptune_project_name}",
-        api_token=neptune_api_key,
-    )
-    return run
-
-
-def get_openai_model_from_neptune(
-    neptune_api_key: str,
-    neptune_project_name: str,
-    neptune_run_id: str,
-) -> ModelId:
-    run = get_neptune_run(
-        neptune_api_key=neptune_api_key,
-        neptune_project_name=neptune_project_name,
-        neptune_run_id=neptune_run_id,
-    )
-    model_id: ModelId = run[MODEL_ID_NEPTUNE_KEY].fetch()
-    assert model_id is not None, "Model id is None"
-    run.stop()
-    return model_id
-
-
-def get_normalizer_from_neptune(
-    neptune_api_key: str,
-    neptune_project_name: str,
-    neptune_run_id: str,
-) -> RewardNormalizer:
-    run = get_neptune_run(
-        neptune_api_key=neptune_api_key,
-        neptune_project_name=neptune_project_name,
-        neptune_run_id=neptune_run_id,
-    )
-    normalizer_dict = run[REWARD_NORMALIZER_NEPTUNE_KEY].fetch()
-    assert normalizer_dict is not None, "Normalizer is None"
-    normalizer = RewardNormalizer.create_from_dict(normalizer_dict)
-    run.stop()
-    return normalizer
-
-
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
     run_id = "OF-53"
@@ -534,7 +488,7 @@ if __name__ == "__main__":
         neptune_run_id=run_id,
     )
     # Optionally retrieve the normalizer from neptune
-    normalizer = get_normalizer_from_neptune(
+    normalizer = get_separate_normalizer_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=neptune_project,
         neptune_run_id=run_id,

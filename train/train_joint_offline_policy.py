@@ -1,11 +1,16 @@
 from concurrent.futures import ThreadPoolExecutor
+from typing import Type
 
 from neptune.new import Run
 from openai.error import RateLimitError, APIConnectionError
 from retry import retry
 from slist import Slist, identity
 
-from api.logged_fine_tune import logged_fine_tune, AlwaysContinueHandler
+from api.logged_fine_tune import (
+    logged_fine_tune,
+    AlwaysContinueHandler,
+    DefaultCLIHandler,
+)
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
 from api.redis_cache import redis_cache
@@ -15,23 +20,30 @@ from evaluate.classification import (
 )
 from parsing.parse_raw import AnthropicRawFormat
 from settings import (
-    OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
     OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
 )
 from train.joint_policy_prompt_formatter import (
     JointPolicyPromptFormatter,
     JointRewardAtBottomFormatter,
 )
-from train.policy_prompt_formatter import (
-    PolicyPromptFormatter,
-    RewardAtBottomFormatter,
+from train.normalizer.joint_reward_normalizer import (
+    JointRewardNormalizer,
+    JointStandardScaleNormalizer,
 )
 from train.reward_models import (
-    DialogueWithReward,
     DialogueWithJointReward,
 )
 from train.separators import END_TOKEN
 from train.train_joint_reward_model import get_harmless_helpful_train
+
+
+def replace_with_normalized(
+    dialogue_with_reward: DialogueWithJointReward, normalizer: JointRewardNormalizer
+) -> DialogueWithJointReward:
+    return DialogueWithJointReward(
+        dialogue=dialogue_with_reward.dialogue,
+        target_reward=normalizer.normalize_reward(dialogue_with_reward.target_reward),
+    )
 
 
 @redis_cache(decode_dict=DialogueWithJointReward)
@@ -57,6 +69,7 @@ def train(
     pair_limit: int,
     finetune_params: FineTuneParams,
     chunks: int,
+    normalizer_type: Type[JointRewardNormalizer],
 ) -> ModelId:
     # Get the prompts
     raw_prompts: Slist[AnthropicRawFormat] = (
@@ -94,17 +107,33 @@ def train(
         executor=thread_pool,
     ).flatten_list()
     # 95th percentile
-    ninety_fifth_percentile_helpful = prompt_with_rewards.map(
-        lambda x: x.target_reward
-    ).sort_by(identity).take(int(len(prompt_with_rewards) * 0.95)).last_or_raise()
+    ninety_fifth_percentile_helpful = (
+        prompt_with_rewards.map(lambda x: x.target_reward)
+        .sort_by(identity)
+        .take(int(len(prompt_with_rewards) * 0.95))
+        .last_or_raise()
+    )
     print(f"95th percentile helpful reward: {ninety_fifth_percentile_helpful}")
     # 5th percentile
-    fifth_percentile_helpful = prompt_with_rewards.map(
-        lambda x: x.target_reward
-    ).sort_by(identity).take(int(len(prompt_with_rewards) * 0.05)).last_or_raise()
+    fifth_percentile_helpful = (
+        prompt_with_rewards.map(lambda x: x.target_reward)
+        .sort_by(identity)
+        .take(int(len(prompt_with_rewards) * 0.05))
+        .last_or_raise()
+    )
     print(f"5th percentile helpful reward: {fifth_percentile_helpful}")
+
+    # Create the normalizer
+    normalizer: JointRewardNormalizer = normalizer_type.from_rewards(
+        prompt_with_rewards.map(lambda x: x.target_reward)
+    )
+    # replace_with_normalized
+    normalized_rewards: Slist[DialogueWithJointReward] = prompt_with_rewards.map(
+        lambda x: replace_with_normalized(dialogue_with_reward=x, normalizer=normalizer)
+    )
+
     # Convert to prompt completions
-    prompt_completions: Slist[PromptCompletion] = prompt_with_rewards.map(
+    prompt_completions: Slist[PromptCompletion] = normalized_rewards.map(
         lambda x: policy_formatter.dialogue_reward_to_prompt_completion(
             x
         ).to_prompt_completion()
@@ -134,7 +163,9 @@ def train(
             completion_start_token="",
             completion_end_token=END_TOKEN,
             neptune_pretrain_callable=neptune_pretrain_callable,
-            should_continue_handler=AlwaysContinueHandler(),
+            should_continue_handler=AlwaysContinueHandler()
+            if idx >= 1
+            else DefaultCLIHandler(),
         )
         # after training, update updated_fine_tune_params
         updated_fine_tune_params.model = new_model_id
@@ -153,10 +184,12 @@ if __name__ == "__main__":
     )
     # Run the main function
     # Try 1000, 10000, 25000, 50000, 75000
+    normalizer_type = JointStandardScaleNormalizer
     train(
         policy_formatter,
         pair_limit=75000,
         finetune_params=finetune_params,
         chunks=999999,
+        normalizer_type=normalizer_type,
     )
     # export PYTHONPATH=.; python train/train_joint_offline.py

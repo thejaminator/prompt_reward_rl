@@ -5,7 +5,10 @@ from pydantic import BaseModel
 from slist import Slist, A
 
 from api.prompt_completion import PromptCompletion
+from settings import REWARD_NORMALIZER_NEPTUNE_KEY
+from train.neptune.runs import get_neptune_run
 from train.metrics.reward_metric import HelpfulHarmlessEvaluationMetric
+from train.normalizer.joint_reward_normalizer import JointRewardNormalizer
 from train.reward_models import HelpfulHarmlessReward
 
 
@@ -213,3 +216,20 @@ class OnlineTrainingData(BaseModel):
             "training_completion": self.training_completion,
         }
         return {**rollout_metric_dict, **more_data}
+
+
+def get_separate_normalizer_from_neptune(
+    neptune_api_key: str,
+    neptune_project_name: str,
+    neptune_run_id: str,
+) -> RewardNormalizer:
+    run = get_neptune_run(
+        neptune_api_key=neptune_api_key,
+        neptune_project_name=neptune_project_name,
+        neptune_run_id=neptune_run_id,
+    )
+    normalizer_dict = run[REWARD_NORMALIZER_NEPTUNE_KEY].fetch()
+    assert normalizer_dict is not None, "Normalizer is None"
+    normalizer = RewardNormalizer.create_from_dict(normalizer_dict)
+    run.stop()
+    return normalizer

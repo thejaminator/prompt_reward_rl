@@ -31,19 +31,33 @@ from settings import (
     OPENAI_KEY,
     NEPTUNE_KEY,
     OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
-    MODEL_ID_NEPTUNE_KEY, OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT, ONLINE_POLICY_NEPTUNE_PROJECT,
+    MODEL_ID_NEPTUNE_KEY,
+    OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
+    ONLINE_POLICY_NEPTUNE_PROJECT,
 )
 from train.assign_rewards import (
-    assign_random_joint_target_reward, assign_high_joint_target_reward,
+    assign_random_joint_target_reward,
+    assign_high_joint_target_reward,
 )
-from train.evaluate_offline import extend_with_rollout_number, ScatterplotResults, plot_scatterplot_and_correlation, \
-    TextWithRolloutNumber
+from train.evaluate_offline import (
+    extend_with_rollout_number,
+    ScatterplotResults,
+    plot_scatterplot_and_correlation,
+    TextWithRolloutNumber,
+)
 from train.evaluate_reward_model import (
     TestDataset,
-    get_helpful_test, get_harmless_test, get_harmless_helpful_test,
+    get_helpful_test,
+    get_harmless_test,
+    get_harmless_helpful_test,
 )
-from train.joint_policy_prompt_formatter import JointPolicyPromptInfo, JointPolicyPromptFormatter, \
-    JointRewardAtBottomFormatter
+from train.joint_policy_prompt_formatter import (
+    JointPolicyPromptInfo,
+    JointPolicyPromptFormatter,
+    JointRewardAtBottomFormatter,
+)
+from train.normalizer.joint_reward_normalizer import JointRewardNormalizer, get_joint_normalizer_from_neptune
+from train.normalizer.reward_normalizer import get_separate_normalizer_from_neptune
 from train.reward_models import DialogueWithJointReward
 from train.separators import END_TOKEN
 
@@ -56,8 +70,8 @@ class JointEvaluationMetric(BaseModel):
     # Prompt + completion, without the reward
     completed_dialogue: str
     target_reward: float
+    normalized_target_reward: float
     actual_reward: float
-
 
 
 class JointEvaluationWithGPTResponse(BaseModel):
@@ -67,25 +81,33 @@ class JointEvaluationWithGPTResponse(BaseModel):
 
 @retry(exceptions=(RateLimitError, APIConnectionError), tries=5, delay=20)
 def get_policy_single_evaluation(
-    policy_prompt_info: JointPolicyPromptInfo,
+    dialogue_with_reward: DialogueWithJointReward,
     policy_model: OpenaiInferenceConfig,
     joint_reward_model: ModelId,
+    normalizer: JointRewardNormalizer,
+    prompt_formatter: JointPolicyPromptFormatter,
     cached: bool = True,
 ) -> JointEvaluationWithGPTResponse:
-    policy_prompt = policy_prompt_info.to_prompt_completion().prompt
+    normalizd_target_reward: float = normalizer.normalize_reward(dialogue_with_reward.target_reward)
+    new_dialogue_with_reward = dialogue_with_reward.copy()
+    new_dialogue_with_reward.target_reward = normalizd_target_reward
+    prompt_info: JointPolicyPromptInfo = prompt_formatter.dialogue_reward_to_prompt_completion(
+        with_reward=new_dialogue_with_reward
+    )
+    policy_prompt = prompt_info.to_prompt_completion().prompt
     # rollout the policy
     policy_completion: GPTFullResponse = (
         cached_get_openai_completion(
-            prompt=policy_prompt_info.to_prompt_completion().prompt, config=policy_model
+            prompt=policy_prompt, config=policy_model
         )
         if cached
         else get_openai_completion(
-            prompt=policy_prompt_info.to_prompt_completion().prompt, config=policy_model
+            prompt=policy_prompt, config=policy_model
         )
     )
     # You need to get the prompt that does not have the target reward, and add the completion
     dialogue = (
-        policy_prompt_info.dialogue_without_reward_without_completion
+        prompt_info.dialogue_without_reward_without_completion
         + "\n\n"
         + policy_completion.completion
     )
@@ -100,13 +122,15 @@ def get_policy_single_evaluation(
         reward_prompt=formatted_reward_prompt,
         completion=policy_completion.completion,
         completed_dialogue=dialogue,
-        target_reward=policy_prompt_info.target_reward,
+        target_reward=dialogue_with_reward.target_reward,
         actual_reward=actual_reward,
+        normalized_target_reward=normalizd_target_reward,
     )
     return JointEvaluationWithGPTResponse(
         metrics=metrics,
         full_response=policy_completion,
     )
+
 
 class EvaluationResults(BaseModel):
     random_target_rewards: SlistPydantic[JointEvaluationMetric]
@@ -121,6 +145,7 @@ def run_evaluation(
     test_dataset: TestDataset,
     rollouts_per_prompt: int,
     policy_formatter: JointPolicyPromptFormatter,
+    normalizer: JointRewardNormalizer,
 ) -> EvaluationResults:
     threadpool = ThreadPoolExecutor(max_workers=20)
     set_openai_key(openai_api_key)
@@ -151,21 +176,16 @@ def run_evaluation(
             rollout_number=text_with_rollout.rollout_number,
         )
     )
-    # Use policy_formatter to format the prompts
-    formatted_random_prompts: Slist[
-        JointPolicyPromptInfo
-    ] = sample_dialogue_with_random_rewards.map(
-        lambda x: policy_formatter.dialogue_reward_to_prompt_completion(x)
-    )
-
     # Rollout the prompts to get the completions, and get the actual rewards
     evaluated_random_prompts: Slist[
         JointEvaluationMetric
-    ] = formatted_random_prompts.par_map(
+    ] = sample_dialogue_with_random_rewards.par_map(
         lambda x: get_policy_single_evaluation(
-            policy_prompt_info=x,
+            dialogue_with_reward=x,
             policy_model=policy_model,
             joint_reward_model=joint_reward_model,
+            normalizer=normalizer,
+            prompt_formatter=policy_formatter,
         ).metrics,
         executor=threadpool,
     )
@@ -178,18 +198,15 @@ def run_evaluation(
             dialogue=text_with_rollout.text
         )
     )
-    formatted_maximum_prompts: Slist[
-        JointPolicyPromptInfo
-    ] = sample_dialogue_with_maximum_rewards.map(
-        lambda x: policy_formatter.dialogue_reward_to_prompt_completion(x)
-    )
     evaluated_maximum_prompts: Slist[
         JointEvaluationMetric
-    ] = formatted_maximum_prompts.par_map(
+    ] = sample_dialogue_with_maximum_rewards.par_map(
         lambda x: get_policy_single_evaluation(
-            policy_prompt_info=x,
+            dialogue_with_reward=x,
             policy_model=policy_model,
             joint_reward_model=joint_reward_model,
+            normalizer=normalizer,
+            prompt_formatter=policy_formatter,
         ).metrics,
         executor=threadpool,
     )
@@ -204,12 +221,8 @@ def plot_random_reward_evaluations(
     random_rewards_evaluations: Slist[JointEvaluationMetric],
 ) -> ScatterplotResults:
     # Calculate correlation coefficient of harmless
-    target: Slist[float] = random_rewards_evaluations.map(
-        lambda x: x.target_reward
-    )
-    actual: Slist[float] = random_rewards_evaluations.map(
-        lambda x: x.actual_reward
-    )
+    target: Slist[float] = random_rewards_evaluations.map(lambda x: x.target_reward)
+    actual: Slist[float] = random_rewards_evaluations.map(lambda x: x.actual_reward)
     results: ScatterplotResults = plot_scatterplot_and_correlation(
         x=actual,
         y=target,
@@ -218,7 +231,6 @@ def plot_random_reward_evaluations(
         ylabel="Target",
     )
     return results
-
 
 
 def log_results_to_neptune(
@@ -245,9 +257,7 @@ def log_results_to_neptune(
     ).average()
 
     # print
-    print(
-        f"Average reward for maximum target reward: {average_reward}"
-    )
+    print(f"Average reward for maximum target reward: {average_reward}")
 
     # convert to df
     # write the results to dataframe
@@ -275,22 +285,14 @@ def log_results_to_neptune(
         run[f"{evaluation_key}/correlation"] = scatter_plots.correlation
         run[f"{evaluation_key}/pvalue"] = scatter_plots.p_value
         # upper bound
-        run[
-            f"{evaluation_key}/upper_bound"
-        ] = scatter_plots.upper_correlation_bound
+        run[f"{evaluation_key}/upper_bound"] = scatter_plots.upper_correlation_bound
         # lower bound
-        run[
-            f"{evaluation_key}/lower_bound"
-        ] = scatter_plots.lower_correlation_bound
+        run[f"{evaluation_key}/lower_bound"] = scatter_plots.lower_correlation_bound
         # confidence
-        run[
-            f"{evaluation_key}/confidence_level"
-        ] = scatter_plots.confidence_level
+        run[f"{evaluation_key}/confidence_level"] = scatter_plots.confidence_level
 
         # Log the average reward for maximum target reward
-        run[
-            f"{evaluation_key}/average_joint_maximum_target"
-        ] = average_reward
+        run[f"{evaluation_key}/average_joint_maximum_target"] = average_reward
         # Log the plots
         run[f"{evaluation_key}/joint_plot"].upload(scatter_plots.figure)
 
@@ -359,6 +361,12 @@ if __name__ == "__main__":
         neptune_project_name=project_name,
         neptune_run_id=run_id,
     )
+    # Optionally retrieve the normalizer from neptune
+    normalizer = get_joint_normalizer_from_neptune(
+        neptune_api_key=NEPTUNE_KEY,
+        neptune_project_name=project_name,
+        neptune_run_id=run_id,
+    )
     policy_config = OpenaiInferenceConfig(
         model=policy_model_id,  # You can set this manually too
         temperature=1.0,  # try 0.6, 1.0
@@ -378,6 +386,7 @@ if __name__ == "__main__":
         test_dataset=TestDataset.HARMLESS_HELPFUL,
         policy_formatter=policy_formatter,
         joint_reward_model=joint_reward_model,
+        normalizer=normalizer,
     )
 
     # plot the results

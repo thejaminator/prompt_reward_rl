@@ -10,7 +10,7 @@ from settings import (
     OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
     TRAIN_EXAMPLES_NEPTUNE_KEY,
 )
-from train.evaluate_offline import get_neptune_run
+from train.neptune.runs import get_neptune_run
 import seaborn as sns
 
 # Specify neptune run ids you want to plot
