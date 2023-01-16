@@ -56,8 +56,8 @@ from train.joint_policy_prompt_formatter import (
     JointPolicyPromptFormatter,
     JointRewardAtBottomFormatter,
 )
+from train.neptune_utils.runs import get_openai_model_from_neptune
 from train.normalizer.joint_reward_normalizer import JointRewardNormalizer, get_joint_normalizer_from_neptune
-from train.normalizer.reward_normalizer import get_separate_normalizer_from_neptune
 from train.reward_models import DialogueWithJointReward
 from train.separators import END_TOKEN
 
@@ -323,33 +323,6 @@ def log_results_to_neptune(
         run.stop()
 
 
-def get_neptune_run(
-    neptune_api_key: str,
-    neptune_project_name: str,
-    neptune_run_id: str,
-) -> Run:
-    run = neptune.new.init_run(
-        with_id=neptune_run_id,
-        project=f"{neptune_project_name}",
-        api_token=neptune_api_key,
-    )
-    return run
-
-
-def get_openai_model_from_neptune(
-    neptune_api_key: str,
-    neptune_project_name: str,
-    neptune_run_id: str,
-) -> ModelId:
-    run = get_neptune_run(
-        neptune_api_key=neptune_api_key,
-        neptune_project_name=neptune_project_name,
-        neptune_run_id=neptune_run_id,
-    )
-    model_id: ModelId = run[MODEL_ID_NEPTUNE_KEY].fetch()
-    assert model_id is not None, "Model id is None"
-    run.stop()
-    return model_id
 
 
 if __name__ == "__main__":

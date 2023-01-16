@@ -49,15 +49,14 @@ from train.evaluate_reward_model import (
     get_helpful_test,
 )
 from train.metrics.reward_metric import HelpfulHarmlessEvaluationMetric
-from train.neptune.runs import get_openai_model_from_neptune
-from train.normalizer.reward_normalizer import get_separate_normalizer_from_neptune
+from train.neptune_utils.runs import get_openai_model_from_neptune
+from train.normalizer.reward_normalizer import get_separate_normalizer_from_neptune, RewardNormalizer
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
     RewardAtBottomFormatter,
 )
 from train.reward_models import DialogueWithReward
-from train.reward_normalizer import RewardNormalizer
 from train.separators import END_TOKEN
 
 

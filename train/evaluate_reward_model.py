@@ -82,7 +82,7 @@ if __name__ == "__main__":
     # Harmless model on 42537 pairs babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12 0.717 on harmless
     main(
         limit=400,
-        model_id="babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12",
+        model_id="babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26",
         openai_api_key=OPENAI_KEY,
         test_dataset=TestDataset.HARMLESS_HELPFUL,
     )

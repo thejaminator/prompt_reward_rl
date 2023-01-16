@@ -20,7 +20,7 @@ from evaluate.classification import (
 )
 from parsing.parse_raw import AnthropicRawFormat
 from settings import (
-    OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
+    OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT, REWARD_NORMALIZER_NEPTUNE_KEY,
 )
 from train.joint_policy_prompt_formatter import (
     JointPolicyPromptFormatter,
@@ -143,6 +143,7 @@ def train(
     # This gets around the limitation that OpenAI doesn't save snapshots of your model
     training_chunks: Slist[Slist[PromptCompletion]] = prompt_completions.grouped(chunks)
     updated_fine_tune_params: FineTuneParams = finetune_params.copy()
+    print(normalizer.to_dict())
     for idx, chunk in training_chunks.enumerated():
 
         def neptune_pretrain_callable(run: Run) -> None:
@@ -150,6 +151,7 @@ def train(
             run["train/total_train_examples"] = len(prompt_completions)
             run["train/chunk_number"] = idx + 1
             run["train/reward_model"] = reward_model
+            run[REWARD_NORMALIZER_NEPTUNE_KEY] = normalizer.to_dict()
 
         if idx > 0:
             updated_fine_tune_params.learning_rate_multiplier = (

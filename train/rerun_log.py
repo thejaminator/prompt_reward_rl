@@ -5,6 +5,7 @@ from api.openai_fine_tune import await_fine_tune_finish, fine_tune_result, JobId
 from api.set_key import set_openai_key
 from settings import NEPTUNE_KEY, OPENAI_KEY
 
+{'name': 'JointStandardScaleNormalizer', 'mean': 0.5001174086891287, 'std': 0.11485019425837607}
 
 def rerun_neptune_log(
     openai_key: str,
