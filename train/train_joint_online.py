@@ -1,7 +1,7 @@
 import random
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
-from typing import Type, Optional, Any
+from typing import Optional, Any
 
 import pandas as pd
 from neptune.new import Run
@@ -11,51 +11,37 @@ from pydantic import BaseModel
 from slist import Slist
 
 from api.cli import cli_input_list
-from api.dataset_paths import anthropic_online_train_path
 from api.logged_fine_tune import logged_fine_tune, AlwaysContinueHandler
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
 from api.type_check import should_not_happen
 from evaluate.inference import OpenaiInferenceConfig, GPTFullResponse
-from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
+from parsing.parse_raw import AnthropicRawFormat
 from settings import (
     ONLINE_POLICY_NEPTUNE_PROJECT,
     NEPTUNE_KEY,
     OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
 )
 from train.assign_rewards import (
-    assign_separate_target_reward,
     assign_joint_target_reward,
 )
 from train.evaluate_joint_offline import (
     get_policy_single_evaluation,
     JointEvaluationWithGPTResponse,
     JointEvaluationMetric,
+    plot_random_reward_evaluations,
 )
 from train.joint_policy_prompt_formatter import (
     JointPolicyPromptInfo,
     JointPolicyPromptFormatter,
     JointRewardAtBottomFormatter,
 )
-from train.metrics.reward_metric import HelpfulHarmlessEvaluationMetric
 from train.neptune_utils.runs import get_openai_model_from_neptune
 from train.normalizer.joint_reward_normalizer import (
     JointRewardNormalizer,
     get_joint_normalizer_from_neptune,
 )
-from train.normalizer.reward_normalizer import (
-    RewardNormalizer,
-    OnlineTrainingData,
-    DoNothingNormalizer,
-)
-from train.policy_prompt_formatter import (
-    PolicyPromptFormatter,
-    PolicyPromptInfo,
-    RewardAtBottomFormatter,
-)
 from train.reward_models import (
-    HelpfulHarmlessReward,
-    DialogueWithReward,
     DialogueWithJointReward,
 )
 from train.separators import END_TOKEN
@@ -183,6 +169,11 @@ def finetune_online_with_neptune(
     online_training_data: Slist[JointOnlineTrainingData],
     reward_sampler: TargetRewardSampler,
 ) -> ModelId:
+    # get the correlation of taret vs actual reward
+    plot = plot_random_reward_evaluations(
+        online_training_data.map(lambda x: x.rollout_metric)
+    )
+
     # Fine-tune the model with the prompt completions
 
     def pre_train_log(run: Run) -> None:
@@ -206,6 +197,15 @@ def finetune_online_with_neptune(
         # normalizer name
         run["online_metrics/normalizer_type"] = normalizer.name()
         run["online_metrics/reward_sampler"] = reward_sampler.name()
+        # Log the results under evaluation
+        run[f"online_metrics/correlation"] = plot.correlation
+        run[f"online_metrics/pvalue"] = plot.p_value
+        # upper bound
+        run[f"online_metrics/upper_bound"] = plot.upper_correlation_bound
+        # lower bound
+        run[f"online_metrics/lower_bound"] = plot.lower_correlation_bound
+        # confidence
+        run[f"online_metrics/confidence_level"] = plot.confidence_level
 
     return logged_fine_tune(
         train=online_training_data.map(lambda x: x.to_prompt_completion()),
