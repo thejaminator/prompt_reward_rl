@@ -2,7 +2,8 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Type
 
 from neptune.new import Run
-from pydantic import BaseModel
+from openai.error import RateLimitError
+from retry import retry
 from slist import Slist, identity
 
 from api.logged_fine_tune import (
@@ -18,31 +19,28 @@ from evaluate.classification import (
     get_positive_class_proba,
 )
 from parsing.parse_raw import AnthropicRawFormat
-from settings import OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT, REWARD_NORMALIZER_NEPTUNE_KEY
+from settings import (
+    OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
+    REWARD_NORMALIZER_NEPTUNE_KEY,
+)
+from train.normalizer.reward_normalizer import RewardNormalizer, StandardScaleNormalizer
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     RewardAtBottomFormatter,
-    RewardAtTopFormatter,
-    DuplicateRewardAtBottomFormatter,
-    RewardAtBottomTimes100Formatter,
 )
 from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
-from train.reward_normalizer import RewardNormalizer, StandardScaleNormalizer
 from train.separators import END_TOKEN
 from train.train_joint_reward_model import get_harmless_helpful_train
-from retry import retry
-from openai.error import RateLimitError
 
 
 def replace_with_normalized(
-        dialogue_with_reward: DialogueWithReward, normalizer: RewardNormalizer
+    dialogue_with_reward: DialogueWithReward, normalizer: RewardNormalizer
 ) -> DialogueWithReward:
     return DialogueWithReward(
         dialogue=dialogue_with_reward.dialogue,
-        target_reward=normalizer.normalize_reward(
-            dialogue_with_reward.target_reward
-        ),
+        target_reward=normalizer.normalize_reward(dialogue_with_reward.target_reward),
     )
+
 
 @redis_cache(decode_dict=DialogueWithReward)
 @retry(exceptions=RateLimitError, tries=5, delay=20)
@@ -149,8 +147,6 @@ def train(
     normalizer: RewardNormalizer = normalizer_type.from_rewards(
         rewards=prompt_with_rewards.map(lambda x: x.target_reward)
     )
-
-
 
     # Normalize the rewards
     prompt_with_normalized_rewards: Slist[DialogueWithReward] = prompt_with_rewards.map(

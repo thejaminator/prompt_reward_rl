@@ -10,8 +10,9 @@ from settings import (
     OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
     TRAIN_EXAMPLES_NEPTUNE_KEY,
 )
-from train.neptune.runs import get_neptune_run
 import seaborn as sns
+
+from train.neptune_utils.runs import get_neptune_run
 
 # Specify neptune run ids you want to plot
 # these are runs that should already have been evaluated by train/evaluate_reward_model.py

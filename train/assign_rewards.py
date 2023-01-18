@@ -67,4 +67,4 @@ def assign_random_joint_target_reward(
 
 
 def assign_high_joint_target_reward(dialogue: str) -> DialogueWithJointReward:
-    return assign_joint_target_reward(dialogue=dialogue, joint_target=0.7)
+    return assign_joint_target_reward(dialogue=dialogue, joint_target=0.8)

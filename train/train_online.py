@@ -1,18 +1,17 @@
 from concurrent.futures import ThreadPoolExecutor
-from typing import Sequence, Type, Optional
+from typing import Type, Optional
 
 import pandas as pd
 from neptune.new import Run
+from neptune.new.types import File
 from openai import InvalidRequestError
 from pydantic import BaseModel
 from slist import Slist
-from neptune.new.types import File
 
 from api.cli import cli_input_list
 from api.dataset_paths import anthropic_online_train_path
 from api.logged_fine_tune import logged_fine_tune, AlwaysContinueHandler
 from api.openai_fine_tune import ModelId, FineTuneParams
-from api.prompt_completion import PromptCompletion
 from api.type_check import should_not_happen
 from evaluate.inference import OpenaiInferenceConfig, GPTFullResponse
 from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
@@ -23,17 +22,16 @@ from train.evaluate_offline import (
     EvaluationWithGPTResponse,
 )
 from train.metrics.reward_metric import HelpfulHarmlessEvaluationMetric
+from train.normalizer.reward_normalizer import (
+    RewardNormalizer,
+    OnlineTrainingData, DoNothingNormalizer,
+)
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
     RewardAtBottomFormatter,
 )
 from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
-from train.reward_normalizer import (
-    RewardNormalizer,
-    MinMaxNormalizer,
-    OnlineTrainingData, DoNothingNormalizer,
-)
 from train.separators import END_TOKEN
 
 

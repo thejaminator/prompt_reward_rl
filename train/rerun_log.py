@@ -5,7 +5,7 @@ from api.openai_fine_tune import await_fine_tune_finish, fine_tune_result, JobId
 from api.set_key import set_openai_key
 from settings import NEPTUNE_KEY, OPENAI_KEY
 
-{'name': 'JointStandardScaleNormalizer', 'mean': 0.5001174086891287, 'std': 0.11485019425837607}
+
 
 def rerun_neptune_log(
     openai_key: str,
@@ -41,7 +41,7 @@ def rerun_neptune_log(
 if __name__ == "__main__":
     rerun_neptune_log(
         openai_job_id="ft-w2shH1Lit9PXcGCY8ZGR04mj",
-        neptune_run_id="OF-15",
+        neptune_run_id="OF1-23",
         project_name="thejaminator/offline-assistant-policy",
         openai_key=OPENAI_KEY,
         neptune_api_key=NEPTUNE_KEY,
