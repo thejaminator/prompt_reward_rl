@@ -5,14 +5,9 @@ TODO: Plot graph
 Our preliminary results that putting the reward tokens at the bottom of the prompt helps the model match the target reward better.
 TODO: Plot graph
 
-#### Compare vs normal model trained with the same number of steps / tokens. To account for the fact that maybe the increased reward comes from lower entropy. 
-#### Compare vs a model on pure chosen examples. Probably won't be better. But in real life you probably don't have so much human labelled examples. The upside of having a reward model is that you can keep having assigned rewards to new examples. Rather than continuing to pay for human labels. Also maybe have to control for temperature here. Since the entropy of the model affects the reward, and now the two models have been trained for different amount of tokens.
+#### Training efficiency
+How could we estimate KLD and reward's relationship here?
 
-###
-Policy and reward model prompt loss?
-
-#### Cost breakdown
-Could be useful for other researchers
 
 # Outline
 - Reward model

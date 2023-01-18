@@ -313,24 +313,26 @@ def main():
     formatter: JointPolicyPromptFormatter = JointRewardAtBottomFormatter()
 
     # Starting policy model
-    # babbage:ft-leadiq:thejaminator-offline-assistant-policy-2022-12-28-17-51-17 150k samples
-    policy_model = OpenaiInferenceConfig(
-        model="babbage:ft-leadiq:thejaminator-online-assistant-policy-2023-01-14-08-43-41",
-        top_p=1.0,
-        temperature=1.0,
-        max_tokens=600,
-        stop=END_TOKEN,
-    )
     # Parameters to tweak
     normalizer: JointRewardNormalizer = get_joint_normalizer_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
-        neptune_run_id="OF1-22",
+        neptune_run_id="OF1-24",
     )
-    joint_reward_model = get_openai_model_from_neptune(
+    policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
-        neptune_run_id="OF1-22",
+        neptune_run_id="OF1-24",
+    )
+    joint_reward_model = ModelId(
+        "babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26"
+    )
+    policy_model = OpenaiInferenceConfig(
+        model=policy_model_id,
+        top_p=1.0,
+        temperature=1.0,
+        max_tokens=600,
+        stop=END_TOKEN,
     )
     n_iteration: int = 1
     prompt_sample_count = 128

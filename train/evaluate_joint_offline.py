@@ -327,7 +327,7 @@ def log_results_to_neptune(
 
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
-    run_id = "OF1-22"
+    run_id = "OF1-24"
     project_name = OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
@@ -347,7 +347,9 @@ if __name__ == "__main__":
         top_p=1.0,
         stop=END_TOKEN,
     )
-    joint_reward_model = ModelId("babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46")
+    joint_reward_model = ModelId(
+        "babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26"
+    )
     policy_formatter = JointRewardAtBottomFormatter()
     number_samples = 500
     rollouts_per_prompts = 1

@@ -8,18 +8,21 @@ Note: This is still a work in progress. We aim to provide a vertical slice of re
 ## Introduction
 Currently most RLHF methods utilize PPO ([Instruct-GPT](https://arxiv.org/abs/2203.02155), [Anthropic](https://arxiv.org/abs/2204.05862))
 to train a policy model. However, it is desirable to explore other methods of RLHF for the following reasons:
-### Ability to specify different target rewards during inference
+### Ability to specify different target during inference
 In PPO, we train the policy model to maximize the reward.
 However, it may be desirable to specify different target rewards during inference.
 In [Anthropic's assistant model](https://arxiv.org/abs/2204.05862), the reward is a mix of helpfulness and harmlessness.
 In reality these two metrics can cause conflict. 
 We may want to specify a lower target helpfulness to lower the risk of the model giving helpful but harmful advice.
-By setting it at inference time, we can avoid having to train a separate policy model for each differing target reward.
+By setting it at inference time, we avoid having to train a separate policy model for each differing target reward.
 This allows for more flexibility in A/B testing and exploration of the helpfulness harmlessness tradeoff.
+
+There could be further use cases in terms of end-user control. For example, some users may prefer shorter completions, while others may prefer longer completions.
+By specifying the target answer length during inference, we also users to indicate their preference for answer length.
 
 It would also be useful in investigating the safety of LMs trained in a Decision Transformer setting.
 Since the reward is specified in the prompt, a bad actor can choose to minimize the target reward instead at inference time.
-In that case, we wish to investigate if our model can catastrophically forget to generate harmful rewards, through online training.
+In that case, we wish to investigate if our model can forget to generate harmful rewards, through online training.
 
 ### Accessibility of RLHF
 It is desirable to have RLHF methods that are accessible to those without compute resources to train LLMs directly.
@@ -64,8 +67,8 @@ We evaluate the ability of the policy model to match the target reward.
 |----------------------------------------------------------------|--------------------------------------------------------------|
 
 
-Preliminary results from training a babbage sized model show that the policy model matches the reward model well for helpfulness. 
-However, for harmlessness the model does not perform as well.
+Preliminary results from training a babbage sized model show that the policy model seems to match the desired target for helpfulness.
+However, we find that the policy model often sacrifices harmlessness for helpfulness. See section "Does it work to maximize both rewards?".
 
 To construct the correlation plot, we used a model trained offline on 150,0000 training samples (75,000 pairs) for 1 epoch. 
 We sampled 500 prompts from the test set, uniformly in the range of (0, 1) to get the target harmless and helpful rewards. These rewards were sampled individually and are not correlated.
@@ -73,7 +76,6 @@ These rewards were placed in the prompt for inference.
 During inference, we used a temperature of 1.0.
 After inference, the reward models calculated the "actual" rewards of the completion. 
 
-\*Our reward model seems to have calibration issues as it rarely outputs a reward in the range of 0 to 0.1 and 0.9 to 1.0
 #### Sample efficiency of matching ability
 We investigate how many samples it takes our preliminary babbage model to match the target reward.
 
@@ -89,7 +91,7 @@ Only at 100,000 training examples did we see a visible effect of the target rewa
 #### Does it work to maximize both rewards?
 We investigate the ideal case where we set both target rewards to their maximum (1.0).
 However, this does not result in completions that maximize both rewards.
-Instead, whenever the "true" reward for helpfulness, the model tends to compensate by decreasing the "true" reward for harmlessness.
+Whenever the target reward for helpfulness is high, the policy model tends to compensate by decreasing harmlessness.
 
 |                  | (1) Vanilla babbage | (2) Behavioral Cloning on helpful and harmless examples | (3) Maximize helpfulness on helpfulness trained policy | (4) Maximize helpfulness on helpfulness + harmlessness trained policy | (5) Maximize helpfulness AND harmlessness on helpfulness + harmlessness trained policy |
 |------------------|---------------------|---------------------------------------------------------|--------------------------------------------------------|-----------------------------------------------------------------------|----------------------------------------------------------------------------------------|
@@ -110,10 +112,14 @@ We also conducted a sensitivity analysis on the temperature. We found that it wa
 - Model (5) is Model (1) finetuned with offline reinforcement learning on the both helpfulness and harmlessness examples. We set the helpfulness target reward to 0.8 and the harmlessness target reward to 0.8.
 
 We initially find that while we can increase helpfulness, our models fail to increase both helpfulness and harmlessness at the same time.
+
 We investigate the reason by looking at the correlation between helpfulness and harmlessness indicated by our reward models, on the completions generated by the policy model. 
 
 ![helpful_vs_harmless_plot.png](images%2Fhelpful_vs_harmless_plot.png)
-Similar to Anthropic's paper, we find that the helpfulness and harmlessness rewards has a strong conflict.
+We find that the helpfulness and harmlessness rewards has a strong conflict. This could be due to the difference in the content of dialogues between the helpful and harmless datasets.
+For example, the harmless reward model seems overly pessimistic in its assessment of on the helpful dataset. This is despite the fact that most examples of the helpful dataset do not contain harmful content.
+Since the hamrless reward model did not have many examples of purely non-harmful dialogues, there is a distributional shift when having it evaluate completions using the helpful dataset prompts.
+
 We are still investigating if our policy model fails to maximize both rewards because of the conflict between the two rewards, or if it is because of the reward model / policy model size and parameters.
 
 
@@ -121,7 +127,8 @@ We are still investigating if our policy model fails to maximize both rewards be
 TODO: Still preliminary results
 - Should sweep hyperparams for behavioral cloning more to show that we really aren't just doing behavioral cloning.
 - Should explore online training / normalization. Did abit of this but not indepth and didnt work.
-- Compare with a reward that comes from a joint reward model rather than separate reward models. Which is what anthropic did. Did this but policy model failed to increase the reward. So maybe policy is too small to find at least an adversarial policy? 
+- Compare with a reward that comes from a joint reward model rather than separate reward models. Which is what anthropic did. Did this but policy model failed to increase the reward. So maybe policy is too small to find at least an adversarial policy?
+- During fine-tuning, add a target answer length 50% to the prompt. This could allow users to choose their own target answer length. 
 
 
 #### Effect of more epochs
@@ -156,7 +163,7 @@ We train on the dataset using the standard autoregressive loss to predict the cl
 We train each reward model on all the samples in the dataset for 1 epoch.
 
 ### Reward model prompt
-The following is an example of a prompt for the harmless reward model.
+The following is an example of a prompt for the reward model.
 ```
 Human: It's okay to be white. Jews should not replace white people.
 
@@ -192,9 +199,7 @@ If the chosen dialogue has a higher probability for the good token than the reje
 Figure: Anthropic's reward model accuracy on for different number of model parameters.
 When training a joint reward model, we get an accuracy of 0.68. This seems close to anthropic's accuracy for a 10^9 parameter model, assuming that they are evaluating on the same dataset. 
 
-TODO: Find out or just ask anthropic whats the dataset? 
-
-TODO: Can we have some calibration curve like Anthropic to check if training it in a non-contrastive manner is a problem?
+TODO: Find out or just ask anthropic what is the dataset? 
 
 ## Work in progress
 See [here](documentation/work_in_progress.md) for a list of work in progress.
@@ -214,7 +219,7 @@ At the time of writing on 1 Jan 2023, the cost follows
 
 
 
-### Reward Model
+### Reward Model cost
 We train two separate reward models, one for helpfulness and one for harmlessness.
 We train both for 1 epoch each.
 
@@ -246,7 +251,7 @@ This would halve the cost to create offline training data.
 
 However, we did not do this in order to keep the experiment simpler.
 
-### Policy model
+### Policy model cost
 We mix the harmless and helpful offline training data to train the policy model.
 
 To train a single "sweep" of the policy model for a hyperparameter, we use 150,000 offline data dialogues.
@@ -270,3 +275,6 @@ We then use the two reward models to calculate the reward for each dialogue. Sin
 
 
 These result in a total cost of ~USD 20 per hyperparameter sweep using a babbage sized model.
+
+We also believe that fine-tuning a model using OpenAI's API only results in a change in the final layers of the model.
+Therefore, it could be possible to achieve better results if one were able to change all the layers of the model.
