@@ -15,12 +15,13 @@ from api.logged_fine_tune import logged_fine_tune, AlwaysContinueHandler
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
 from api.type_check import should_not_happen
-from evaluate.inference import OpenaiInferenceConfig, GPTFullResponse
+from evaluate.inference import OpenaiInferenceConfig, GPTFullResponse, FinishReasons
 from parsing.parse_raw import AnthropicRawFormat
 from settings import (
     ONLINE_POLICY_NEPTUNE_PROJECT,
     NEPTUNE_KEY,
     OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
+    REWARD_NORMALIZER_NEPTUNE_KEY,
 )
 from train.assign_rewards import (
     assign_joint_target_reward,
@@ -66,7 +67,22 @@ class UniformRandomSampler(TargetRewardSampler):
 
 class HighRewardSampler(TargetRewardSampler):
     def sample_target_reward(self) -> float:
-        return 0.8
+        # rand between 0.7 and 1
+        return random.random() * 0.3 + 0.7
+
+
+class OneSDRewardSampler(TargetRewardSampler):
+    def __init__(self, sd: float):
+        self.sd = sd
+
+    def sample_target_reward(self) -> float:
+        # sample +- 0.05 around the sd
+        return self.sd + (random.random() * 0.1 - 0.05)
+
+    def from_rewards(self, rewards: Slist[float]) -> "OneSDRewardSampler":
+        std = rewards.standard_deviation()
+        assert std is not None
+        return OneSDRewardSampler(std)
 
 
 def rollout_and_evaluate(
@@ -142,11 +158,15 @@ def evaluated_rollout_to_prompt_completion(
         )
     )
     p_c = policy_prompt.to_prompt_completion()
+    finish_reason: FinishReasons = evaluated_rollout.full_response.finish_reason
     return JointOnlineTrainingData(
         rollout_metric=evaluated_rollout.metrics,
         normalized_reward=normalized_reward,
         training_prompt=p_c.prompt,
-        training_completion=p_c.completion,
+        # Only add the end token if the rollout finished naturally
+        training_completion=p_c.completion + END_TOKEN
+        if finish_reason == FinishReasons.stop
+        else p_c.completion,
     )
 
 
@@ -206,12 +226,14 @@ def finetune_online_with_neptune(
         run[f"online_metrics/lower_bound"] = plot.lower_correlation_bound
         # confidence
         run[f"online_metrics/confidence_level"] = plot.confidence_level
+        run[REWARD_NORMALIZER_NEPTUNE_KEY] = normalizer.to_dict()
 
     return logged_fine_tune(
         train=online_training_data.map(lambda x: x.to_prompt_completion()),
         project_name=project_name,
         completion_start_token="",
-        completion_end_token=END_TOKEN,
+        # Don't add the end token here as we only want to add it if it stopped naturally
+        completion_end_token="",
         params=fine_tune_params,
         neptune_pretrain_callable=pre_train_log,
         should_continue_handler=AlwaysContinueHandler(),
@@ -319,10 +341,8 @@ def main():
         neptune_project_name=OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
         neptune_run_id="OF1-24",
     )
-    policy_model_id = get_openai_model_from_neptune(
-        neptune_api_key=NEPTUNE_KEY,
-        neptune_project_name=OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
-        neptune_run_id="OF1-24",
+    policy_model_id = ModelId(
+        "babbage:ft-leadiq:thejaminator-online-assistant-policy-2023-01-19-12-31-36"
     )
     joint_reward_model = ModelId(
         "babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26"
@@ -335,7 +355,7 @@ def main():
         stop=END_TOKEN,
     )
     n_iteration: int = 1
-    prompt_sample_count = 128
+    prompt_sample_count = 256
     rollouts_per_prompt = 8
     all_dialogues: Slist[AnthropicRawFormat] = get_online_prompts()
     max_iterations = 20
@@ -375,7 +395,7 @@ def main():
         new_model_id = single_iteration(
             dialogues=sampled_extended_dialogues,
             policy_model=policy_model,
-            reward_sampler=UniformRandomSampler(),
+            reward_sampler=HighRewardSampler(),
             formatter=formatter,
             joint_reward_model=joint_reward_model,
             project_name=online_project_name,

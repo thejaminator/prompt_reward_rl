@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Optional, Dict, Any, List, Union
 
 import numpy as np
@@ -34,6 +35,11 @@ class TokenInfo(BaseModel):
     top_5_tokens: SlistPydantic[TokenProba]
 
 
+class FinishReasons(str, Enum):
+    stop = "stop"
+    length = "length"
+
+
 class GPTFullResponse(BaseModel):
     id: Optional[str]
     prompt: str
@@ -43,7 +49,7 @@ class GPTFullResponse(BaseModel):
     # so we can view this in mongo easily
     completion_total_log_prob: float
     average_completion_total_log_prob: Optional[float]
-    finish_reason: str
+    finish_reason: FinishReasons
 
     @property
     def token_infos(self) -> SlistPydantic[TokenInfo]:

@@ -1,7 +1,7 @@
 from typing import NewType
 
 import numpy as np
-from openai.error import RateLimitError, APIConnectionError
+from openai.error import RateLimitError, APIConnectionError, Timeout
 from pydantic import BaseModel
 from retry import retry
 
@@ -18,7 +18,7 @@ def format_dialogue_into_reward_prompt(conversation: str) -> PromptForRewardMode
     return PromptForRewardModel(conversation.strip() + end_prompt_seperator)
 
 
-@retry(exceptions=(RateLimitError,APIConnectionError), tries=5, delay=20)
+@retry(exceptions=(RateLimitError,APIConnectionError, Timeout), tries=5, delay=20)
 @redis_cache()
 def get_positive_class_proba(model_id: str, prompt: PromptForRewardModel) -> float:
     """Returns the probability of the positive class. aka reward"""
