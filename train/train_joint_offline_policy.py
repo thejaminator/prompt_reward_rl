@@ -178,9 +178,9 @@ def train(
 if __name__ == "__main__":
     policy_formatter = JointRewardAtBottomFormatter()
     finetune_params = FineTuneParams(
-        model="babbage:ft-leadiq:thejaminator-offline-joint-policy-2023-01-15-18-49-23",
+        model="babbage:ft-leadiq:thejaminator-offline-joint-policy-2023-01-20-04-02-18",
         n_epochs=1,
-        learning_rate_multiplier=0.1,
+        learning_rate_multiplier=0.05,
         batch_size=128,
         prompt_loss_weight=0.1,
     )

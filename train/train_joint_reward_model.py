@@ -3,6 +3,8 @@ from slist import Slist
 from api.dataset_paths import (
     anthropic_harmless_train_path,
     anthropic_helpful_train_path,
+    anthropic_online_train_path,
+    anthropic_rejection_sampled_train_path,
 )
 from api.logged_fine_tune import logged_fine_tune
 from api.openai_fine_tune import FineTuneParams
@@ -22,6 +24,18 @@ def get_harmless_helpful_train() -> Slist[AnthropicRawFormat]:
     )
     print(f"Loaded {len(helpful_train)} helpful train pairs")
     return harmless_train + helpful_train
+
+
+def get_online_and_rejection_sampling_train() -> Slist[AnthropicRawFormat]:
+    online_train: Slist[AnthropicRawFormat] = get_raw_anthropic(
+        anthropic_online_train_path
+    )
+    print(f"Loaded {len(online_train)} online train pairs")
+    rejected_sampled_train: Slist[AnthropicRawFormat] = get_raw_anthropic(
+        anthropic_rejection_sampled_train_path
+    )
+    print(f"Loaded {len(rejected_sampled_train)} rejected sampled train pairs")
+    return online_train + rejected_sampled_train
 
 
 def format_raw_into_prompt_completion(
@@ -48,8 +62,10 @@ def format_raw_into_prompt_completion(
 def main():
     limit = 100000
     harmless_helpful_train = get_harmless_helpful_train()
-    print(f"Loaded {len(harmless_helpful_train)} harmless/helpful train examples")
-    training_pairs: Slist[Slist[PromptCompletion]] = harmless_helpful_train.map(
+    online_and_rejection_sampling_train = get_online_and_rejection_sampling_train()
+    all_train = harmless_helpful_train + online_and_rejection_sampling_train
+    print(f"Loaded {len(all_train)} train examples")
+    training_pairs: Slist[Slist[PromptCompletion]] = all_train.map(
         format_raw_into_prompt_completion
     )
     print(f"Created {len(training_pairs)} training_pairs")

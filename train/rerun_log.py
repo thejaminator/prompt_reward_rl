@@ -40,9 +40,9 @@ def rerun_neptune_log(
 
 if __name__ == "__main__":
     rerun_neptune_log(
-        openai_job_id="ft-w2shH1Lit9PXcGCY8ZGR04mj",
-        neptune_run_id="OF1-23",
-        project_name="thejaminator/offline-assistant-policy",
+        openai_job_id="ft-aC52L7yemRy7WL188uSfMbxS",
+        neptune_run_id="OF1-26",
+        project_name="thejaminator/offline-joint-policy",
         openai_key=OPENAI_KEY,
         neptune_api_key=NEPTUNE_KEY,
     )

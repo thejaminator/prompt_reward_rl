@@ -58,11 +58,34 @@ class TargetRewardSampler(ABC):
     def name(cls) -> str:
         return cls.__name__
 
+    @abstractmethod
+    def to_dict(self) -> dict[str, Any]:
+        raise NotImplementedError()
+
+    @staticmethod
+    @abstractmethod
+    def from_rewards(rewards: Slist[float]) -> "TargetRewardSampler":
+        raise NotImplementedError()
+
+
+
 
 class UniformRandomSampler(TargetRewardSampler):
     def sample_target_reward(self) -> float:
         # uniform random between 0 and 1
         return random.random()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name(),
+        }
+
+    @staticmethod
+    def from_rewards(rewards: Slist[float]) -> "UniformRandomSampler":
+        # Since we are sampling from a static distribution, we don't use the rewards
+        return UniformRandomSampler()
+
+
 
 
 class HighRewardSampler(TargetRewardSampler):
@@ -70,19 +93,55 @@ class HighRewardSampler(TargetRewardSampler):
         # rand between 0.7 and 1
         return random.random() * 0.3 + 0.7
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name(),
+        }
+
+    @staticmethod
+    def from_rewards(rewards: Slist[float]) -> "HighRewardSampler":
+        # Since we are sampling from a static distribution, we don't use the rewards
+        return HighRewardSampler()
+
+class HighLowRandomSampler(TargetRewardSampler):
+    def sample_target_reward(self) -> float:
+        # sample between 0 and 0.3, and 0.7 and 1
+        return random.random()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name(),
+        }
+
+    @staticmethod
+    def from_rewards(rewards: Slist[float]) -> "HighLowRandomSampler":
+        # Since we are sampling from a static distribution, we don't use the rewards
+        return HighLowRandomSampler()
 
 class OneSDRewardSampler(TargetRewardSampler):
-    def __init__(self, sd: float):
+    # Samples one standard deviation above the mean
+    def __init__(self, sd: float, mean: float):
         self.sd = sd
+        self.mean = mean
 
     def sample_target_reward(self) -> float:
         # sample +- 0.05 around the sd
-        return self.sd + (random.random() * 0.1 - 0.05)
+        return self.mean + self.sd + (random.random() * 0.1 - 0.05)
 
-    def from_rewards(self, rewards: Slist[float]) -> "OneSDRewardSampler":
+    @staticmethod
+    def from_rewards(rewards: Slist[float]) -> "OneSDRewardSampler":
         std = rewards.standard_deviation()
         assert std is not None
-        return OneSDRewardSampler(std)
+        average = rewards.average()
+        assert average is not None
+        return OneSDRewardSampler(sd=std, mean=average)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name(),
+            "sd": self.sd,
+            "mean": self.mean,
+        }
 
 
 def rollout_and_evaluate(
@@ -110,6 +169,9 @@ def rollout_and_evaluate(
         )
     except InvalidRequestError as e:
         print(f"Invalid request error, probably token limit: {e}")
+        return None
+    except RuntimeError as e:
+        print(f"Runtime error: {e}")
         return None
     return rollout
 
@@ -193,6 +255,9 @@ def finetune_online_with_neptune(
     plot = plot_random_reward_evaluations(
         online_training_data.map(lambda x: x.rollout_metric)
     )
+    average_target_reward = online_training_data.map(
+        lambda x: x.rollout_metric.target_reward
+    ).average()
 
     # Fine-tune the model with the prompt completions
 
@@ -227,6 +292,8 @@ def finetune_online_with_neptune(
         # confidence
         run[f"online_metrics/confidence_level"] = plot.confidence_level
         run[REWARD_NORMALIZER_NEPTUNE_KEY] = normalizer.to_dict()
+        run[f"online_metrics/reward_sampler"] = reward_sampler.to_dict()
+        run[f"online_metrics/average_target_reward"] = average_target_reward
 
     return logged_fine_tune(
         train=online_training_data.map(lambda x: x.to_prompt_completion()),
@@ -256,7 +323,7 @@ def single_iteration(
     rollouts_per_prompt: int,
     n_iteration: int,
     normalizer: JointRewardNormalizer,
-) -> ModelId:
+) -> tuple[ModelId, TargetRewardSampler]:
     # Rollout and reward the prompts
     rollouts: Slist[JointEvaluationWithGPTResponse] = dialogues.par_map(
         lambda prompt: rollout_and_evaluate(
@@ -284,14 +351,22 @@ def single_iteration(
             evaluated_rollout=r, formatter=formatter, normalizer=normalizer
         )
     )
+    actual_rewards = online_training_data.map(lambda x: x.rollout_metric.actual_reward)
+    new_reward_sampler: TargetRewardSampler = UniformRandomSampler.from_rewards(
+        actual_rewards
+    )
+    print(f"New reward sampler: {new_reward_sampler.to_dict()}")
     # Fine-tune the model with the prompt completions
-    return finetune_online_with_neptune(
-        fine_tune_params=fine_tune_params,
-        project_name=project_name,
-        rollout_buffer_metrics=rollout_buffer_metrics,
-        online_training_data=online_training_data,
-        reward_sampler=reward_sampler,
-        normalizer=normalizer,
+    return (
+        finetune_online_with_neptune(
+            fine_tune_params=fine_tune_params,
+            project_name=project_name,
+            rollout_buffer_metrics=rollout_buffer_metrics,
+            online_training_data=online_training_data,
+            reward_sampler=reward_sampler,
+            normalizer=normalizer,
+        ),
+        new_reward_sampler,
     )
 
 
@@ -342,7 +417,7 @@ def main():
         neptune_run_id="OF1-24",
     )
     policy_model_id = ModelId(
-        "babbage:ft-leadiq:thejaminator-online-assistant-policy-2023-01-19-12-31-36"
+        "babbage:ft-leadiq:thejaminator-online-assistant-policy-2023-01-20-08-05-05"
     )
     joint_reward_model = ModelId(
         "babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26"
@@ -359,6 +434,8 @@ def main():
     rollouts_per_prompt = 8
     all_dialogues: Slist[AnthropicRawFormat] = get_online_prompts()
     max_iterations = 20
+    # Start with a UniformRandomSampler
+    reward_sampler: TargetRewardSampler = UniformRandomSampler()
     while True:
         if n_iteration > max_iterations:
             should_continue = cli_input_list(
@@ -392,10 +469,10 @@ def main():
             batch_size=64,
         )
         # Single iteration
-        new_model_id = single_iteration(
+        new_model_id, new_reward_sampler = single_iteration(
             dialogues=sampled_extended_dialogues,
             policy_model=policy_model,
-            reward_sampler=HighRewardSampler(),
+            reward_sampler=reward_sampler,
             formatter=formatter,
             joint_reward_model=joint_reward_model,
             project_name=online_project_name,
@@ -408,6 +485,8 @@ def main():
         n_iteration += 1
         # Update the policy model
         policy_model.model = new_model_id
+        # Update the reward sampler
+        reward_sampler = new_reward_sampler
         print(f"Finished iteration {n_iteration}")
 
 

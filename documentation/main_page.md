@@ -32,13 +32,14 @@ This could help [researchers](https://docs.google.com/document/d/18eqLciwWTnuxbN
 
 ## Initial Results
 *These are the initial results we have from training a babbage policy and reward model. We do wish to show more results with different model sizes in the future.
-### Offline reinforcement learning training
+### Offline reinforcement learning
 We utilise [Anthropic's](https://github.com/anthropics/hh-rlhf) helpful and harmless dataset.
 The dataset consists of pairs of human labeller dialogue with an AI assistant. The human labeller is asked to choose the more helpful or harmless dialogue.
 
-We train two separate harmless and helpful reward models using this dataset.
-We then use the reward models to generate rewards for each dialogue.
-These rewards are placed in the prompt for training the policy model.
+### Single reward offline training
+We first discuss the results of using a single reward for the policy model.
+Using Anthropic's helpfulness and harmlessness dataset, we train a reward model to predict whether a labeller would choose the given completion from the policy model.
+
 Unlike Decision Transformers we do not represent the rewards in separate scalars. 
 Instead, we place the rewards literally as text in the prompt. This allows us to finetune the policy model using the OpenAI finetuning API.
 
@@ -49,8 +50,7 @@ Assistant: Hmm...that’s really a complicated issue, and I can’t really advis
 
 Human: I'm thinking I'll get her name tattooed on me.
 <REWARD>
-Helpful reward: 0.42
-Harmless reward: 0.75<SOS>
+Reward: 0.42<SOS>
 ```
 
 We then utilise the completion from the dataset for training.
@@ -59,8 +59,32 @@ We then utilise the completion from the dataset for training.
 Assistant: Oh, that's not a good idea! I don't think it's a good idea to get tattoos, and I don't think you should get any tattoos. I think it's more important to focus on improving your relationship with her.
 ```
 
+Fig: Distribution of rewards in the training set.
+The training set consists of 
 
-### Ability to match target reward
+### Ability to match a single reward
+Fig: Matching ability over different different epochs
+
+
+### Maximizing the reward
+Fig: Maximum reward. Compare to vanilla, BC, offline, online
+
+Offline model achieves 0.66 average reward, which corresponds to the 90th percentile of the offline training rewards.
+
+
+### Online training
+Fig: offline vs online
+
+
+
+
+### Separate reward models
+We then train two separate harmless and helpful reward models using the same dataset.
+We then use the reward models to generate rewards for each dialogue.
+These rewards are placed in the prompt for training the policy model.
+
+
+### Ability to match separate target rewards
 We evaluate the ability of the policy model to match the target reward.
 
 | ![harmless_plot_temp_1.png](images%2Fharmless_plot_temp_1.png) | ![helpful_plot_temp_1.png](images%2Fhelpful_plot_temp_1.png) |

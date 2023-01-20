@@ -327,7 +327,7 @@ def log_results_to_neptune(
 
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
-    run_id = "ON-76"
+    run_id = "ON-95"
     project_name = ONLINE_POLICY_NEPTUNE_PROJECT
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
@@ -338,7 +338,7 @@ if __name__ == "__main__":
     normalizer = get_joint_normalizer_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
-        neptune_run_id="OF1-24",
+        neptune_run_id="OF1-27",
     )
     policy_config = OpenaiInferenceConfig(
         model=policy_model_id,  # You can set this manually too
