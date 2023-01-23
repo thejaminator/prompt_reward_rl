@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from retry import retry
 from scipy.stats import pearsonr, _result_classes
 from scipy.stats._common import ConfidenceInterval
+from seaborn._core.plot import Plot
 from slist import Slist
 from slist.pydantic_compat import SlistPydantic
 
@@ -203,7 +204,7 @@ def plot_scatterplot_and_correlation(
 
 def plot_linechart(
     x: List[float], y: List[float], title: str, xlabel: str, ylabel: str
-) -> Figure:
+) -> Plot:
     # plots a line chart
     # clear seaborn
     sns.reset_orig()
@@ -220,12 +221,9 @@ def plot_linechart(
     plot.set(xlabel=xlabel, ylabel=ylabel)
     # set the x and y axis to (0, 1)
     plot.set(xlim=(0, 1), ylim=(0, 1))
-    figure = plot.figure
     # make a green line that shows the oracle 1:1 line
     plot.plot([0, 1], [0, 1], transform=plot.transAxes, ls="--", color="green")
-    # write the plot to a file
-    figure.savefig(f"{title}.png")
-    return figure
+    return plot
 
 
 class EvaluationResults(BaseModel):

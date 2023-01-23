@@ -17,7 +17,7 @@ from evaluate.inference import OpenaiInferenceConfig, GPTFullResponse
 from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
 from settings import ONLINE_POLICY_NEPTUNE_PROJECT
 from train.assign_rewards import assign_separate_target_reward
-from train.evaluate_offline import (
+from train.evaluate_separate_policy import (
     get_policy_single_evaluation,
     EvaluationWithGPTResponse,
 )

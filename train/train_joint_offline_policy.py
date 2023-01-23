@@ -26,6 +26,8 @@ from train.joint_policy_prompt_formatter import (
     JointPolicyPromptFormatter,
     JointRewardAtBottomFormatter,
 )
+from train.metrics.training_distribution import calculate_training_distribution_statistics, \
+    TrainingDistributionStatistic
 from train.normalizer.joint_reward_normalizer import (
     JointRewardNormalizer,
     JointStandardScaleNormalizer,
@@ -73,7 +75,7 @@ def train(
 ) -> ModelId:
     # Get the prompts
     raw_prompts: Slist[AnthropicRawFormat] = (
-        get_all_train().shuffle(seed="999").take(pair_limit)
+        get_harmless_helpful_train().shuffle(seed="999").take(pair_limit)
     )
     reward_model: ModelId = ModelId(
         "babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26"
@@ -106,22 +108,11 @@ def train(
         get_rewards_and_count,
         executor=thread_pool,
     ).flatten_list()
-    # 95th percentile
-    ninety_fifth_percentile_helpful = (
+
+    reward_distribution_distribution: TrainingDistributionStatistic = calculate_training_distribution_statistics(
         prompt_with_rewards.map(lambda x: x.target_reward)
-        .sort_by(identity)
-        .take(int(len(prompt_with_rewards) * 0.95))
-        .last_or_raise()
     )
-    print(f"95th percentile helpful reward: {ninety_fifth_percentile_helpful}")
-    # 5th percentile
-    fifth_percentile_helpful = (
-        prompt_with_rewards.map(lambda x: x.target_reward)
-        .sort_by(identity)
-        .take(int(len(prompt_with_rewards) * 0.05))
-        .last_or_raise()
-    )
-    print(f"5th percentile helpful reward: {fifth_percentile_helpful}")
+    print(f"Reward distribution: {reward_distribution_distribution}")
 
     # Create the normalizer
     normalizer: JointRewardNormalizer = normalizer_type.from_rewards(
@@ -152,6 +143,8 @@ def train(
             run["train/chunk_number"] = idx + 1
             run["train/reward_model"] = reward_model
             run[REWARD_NORMALIZER_NEPTUNE_KEY] = normalizer.to_dict()
+            run["train/reward_distribution"] = reward_distribution_distribution.dict()
+
 
         if idx > 0:
             updated_fine_tune_params.learning_rate_multiplier = (
@@ -178,10 +171,10 @@ def train(
 if __name__ == "__main__":
     policy_formatter = JointRewardAtBottomFormatter()
     finetune_params = FineTuneParams(
-        model="babbage:ft-leadiq:leadiq-assistant-reward-model-2023-01-20-08-40-43",
+        model="babbage:ft-leadiq:thejaminator-offline-joint-policy-2023-01-20-06-03-15",
         n_epochs=1,
-        learning_rate_multiplier=0.1,
-        batch_size=32,
+        learning_rate_multiplier=0.05,
+        batch_size=128,
         prompt_loss_weight=0.1,
     )
     # Run the main function
@@ -189,9 +182,12 @@ if __name__ == "__main__":
     normalizer_type = JointStandardScaleNormalizer
     train(
         policy_formatter,
-        pair_limit=2000000,
+        pair_limit=75000,
         finetune_params=finetune_params,
         chunks=999999,
         normalizer_type=normalizer_type,
     )
     # export PYTHONPATH=.; python train/train_joint_offline.py
+    """
+    Reward distribution: min=0.09957142308017183 max=0.945666965807259 mean=0.5001174086891287 median=0.4930572037643971 std=0.11485019425837607 one_percentile=0.23494138397650455 five_percentile=0.31770856940167097 twenty_five_percentile=0.4275376902366216 seventy_five_percentile=0.5685117348300421 ninety_five_percentile=0.7037077971606336 ninety_nine_percentile=0.8031785942122077 count=150000
+    """

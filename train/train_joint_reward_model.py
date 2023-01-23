@@ -95,3 +95,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+"""
+For harmless+ helpful, we get:
+Reward distribution: min=0.09957142308017183 max=0.945666965807259 mean=0.5001174086891287 median=0.4930572037643971 std=0.11485019425837607 five_percentile=0.31770856940167097 twenty_five_percentile=0.4275376902366216 seventy_five_percentile=0.5685117348300421 ninety_five_percentile=0.7037077971606336 count=150000
+"""

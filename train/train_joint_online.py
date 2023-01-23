@@ -26,7 +26,7 @@ from settings import (
 from train.assign_rewards import (
     assign_joint_target_reward,
 )
-from train.evaluate_joint_offline import (
+from train.evaluate_joint_policy import (
     get_policy_single_evaluation,
     JointEvaluationWithGPTResponse,
     JointEvaluationMetric,

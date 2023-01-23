@@ -5,11 +5,13 @@ from typing import Optional
 import neptune
 import neptune.new
 import pandas as pd
+from matplotlib.figure import Figure
 from neptune.new import Run
 from neptune.new.types import File
 from openai.error import RateLimitError, APIConnectionError
 from pydantic import BaseModel
 from retry import retry
+from seaborn._core.plot import Plot
 from slist import Slist
 from slist.pydantic_compat import SlistPydantic
 
@@ -39,7 +41,7 @@ from train.assign_rewards import (
     assign_random_joint_target_reward,
     assign_high_joint_target_reward,
 )
-from train.evaluate_offline import (
+from train.evaluate_separate_policy import (
     extend_with_rollout_number,
     ScatterplotResults,
     plot_scatterplot_and_correlation,
@@ -246,7 +248,9 @@ def to_nearest_zero_point_zero_five(x: float) -> float:
 
 def plot_random_reward_evaluations_like_paper(
     random_rewards_evaluations: Slist[JointEvaluationMetric],
-) -> None:
+    one_percentile: float,  # calculated from offline dataset
+    ninety_nine_percentile: float,  # calculated from offline dataset
+) -> Figure:
     # Try to create a plot like the decision transformer's paper
     tups: Slist[
         tuple[float, Slist[JointEvaluationMetric]]
@@ -259,17 +263,25 @@ def plot_random_reward_evaluations_like_paper(
     target = averaged_groups.map(lambda x: x[0])
     actual = averaged_groups.map(lambda x: x[1])
     # in the paper, target is x, actual is y
-    plot_linechart(
+    plot: Plot = plot_linechart(
         x=target,
         y=actual,
         title="Actual vs Target Reward",
         xlabel="Target Reward",
         ylabel="Actual Reward",
     )
+    # Add a vertical brown dashed line at ninety_nine_percentile
+    plot.add_vline(x=ninety_nine_percentile, line_dash="dash", line_color="brown")
+    # Add a vertical gray dashed line at one_percentile
+    plot.add_vline(x=one_percentile, line_dash="dash", line_color="gray")
+    # write the plot to a file
+    plot.savefig(f"Actual vs Target Reward.png")
+    return plot.figure
 
 
 def log_results_to_neptune(
     scatter_plots: ScatterplotResults,
+    paper_plots: Figure,
     neptune_api_key: str,
     neptune_project_name: str,
     neptune_run_id: str,
@@ -330,6 +342,7 @@ def log_results_to_neptune(
         run[f"{evaluation_key}/average_joint_maximum_target"] = average_reward
         # Log the plots
         run[f"{evaluation_key}/joint_plot"].upload(scatter_plots.figure)
+        run[f"{evaluation_key}/plot_like_paper"].upload(paper_plots)
 
         # Save the results dataframe as html
         run[f"{evaluation_key}/random_rewards_html"].upload(
@@ -360,8 +373,8 @@ def log_results_to_neptune(
 
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
-    run_id = "ON-107"
-    project_name = ONLINE_POLICY_NEPTUNE_PROJECT
+    run_id = "OF1-27"
+    project_name = OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
         neptune_project_name=project_name,
@@ -401,8 +414,10 @@ if __name__ == "__main__":
     scatter_plots: ScatterplotResults = plot_random_reward_evaluations(
         random_rewards_evaluations=evaluations.random_target_rewards
     )
-    plot_random_reward_evaluations_like_paper(
-        random_rewards_evaluations=evaluations.random_target_rewards
+    paper_correlation_plot = plot_random_reward_evaluations_like_paper(
+        random_rewards_evaluations=evaluations.random_target_rewards,
+        one_percentile=0.2349,
+        ninety_nine_percentile=0.803,
     )
 
     # save the results to neptune
@@ -417,4 +432,5 @@ if __name__ == "__main__":
         number_samples=number_samples,
         rollouts_per_sample=rollouts_per_prompts,
         results=evaluations,
+        paper_plots=paper_correlation_plot,
     )
