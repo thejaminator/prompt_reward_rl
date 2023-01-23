@@ -29,7 +29,6 @@ class RewardNormalizer(ABC):
     def to_dict(self) -> dict[str, Any]:
         raise NotImplementedError
 
-
     @staticmethod
     def create_from_dict(_dict: dict[str, Any]) -> "RewardNormalizer":
         name = _dict["name"]
@@ -58,7 +57,7 @@ class MinMaxNormalizer(RewardNormalizer):
         self.helpful_max = helpful_max
 
     @staticmethod
-    def from_rewards(rewards: Slist[HelpfulHarmlessReward])-> "MinMaxNormalizer":
+    def from_rewards(rewards: Slist[HelpfulHarmlessReward]) -> "MinMaxNormalizer":
         harmless_rewards: Slist[float] = rewards.map(lambda r: r.harmless)
         helpful_rewards: Slist[float] = rewards.map(lambda r: r.helpful)
         harmless_min: float = min(harmless_rewards)
@@ -114,6 +113,7 @@ class DoNothingNormalizer(RewardNormalizer):
     @staticmethod
     def from_rewards(rewards: Slist[HelpfulHarmlessReward]) -> "DoNothingNormalizer":
         return DoNothingNormalizer()
+
     def normalize_reward(self, reward: HelpfulHarmlessReward) -> HelpfulHarmlessReward:
         return reward
 
@@ -221,14 +221,19 @@ def get_separate_normalizer_from_neptune(
     neptune_api_key: str,
     neptune_project_name: str,
     neptune_run_id: str,
-) -> RewardNormalizer:
+) -> Optional[RewardNormalizer]:
     run = get_neptune_run(
         neptune_api_key=neptune_api_key,
         neptune_project_name=neptune_project_name,
         neptune_run_id=neptune_run_id,
     )
-    normalizer_dict = run[REWARD_NORMALIZER_NEPTUNE_KEY].fetch()
-    assert normalizer_dict is not None, "Normalizer is None"
-    normalizer = RewardNormalizer.create_from_dict(normalizer_dict)
+    normalizer_dict = (
+        run[REWARD_NORMALIZER_NEPTUNE_KEY].fetch()
+        if REWARD_NORMALIZER_NEPTUNE_KEY in run
+        else None
+    )
+    normalizer = (
+        RewardNormalizer.create_from_dict(normalizer_dict) if normalizer_dict else None
+    )
     run.stop()
     return normalizer

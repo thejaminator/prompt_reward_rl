@@ -83,6 +83,7 @@ todo: chart of distribution of rewards in the training set.
 
 We compare to a policy conditioned on the helpfulness reward only. We evaluate its performance on prompts from the helpful dataset only.
 This results to a simpler task for the policy, since we only aim for it to be helpful, rather than helpfulness and harmless at the same time.
+We also observe that the relationship with the target reward is non-monotonic. At very high target rewards, the policy generates completions that are worse than setting a lower target reward.
 
 
 ### Separate reward models

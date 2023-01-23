@@ -3,6 +3,7 @@ from typing import Optional, Dict, Any, List, Union
 
 import numpy as np
 import openai
+from openai import APIError
 from pydantic import BaseModel, conlist
 from slist import Slist
 from slist.pydantic_compat import SlistPydantic
@@ -145,22 +146,27 @@ def get_openai_completion(
     config: OpenaiInferenceConfig,
     prompt: str,
 ) -> GPTFullResponse:
-    response_dict = openai.Completion.create(
-        model=config.model,
-        prompt=prompt,
-        max_tokens=config.max_tokens,
-        temperature=config.temperature,
-        presence_penalty=config.presence_penalty,
-        frequency_penalty=config.frequency_penalty,
-        top_p=1,
-        n=1,
-        stream=False,
-        stop=[config.stop] if isinstance(config.stop, str) else config.stop,
-        # needed to get logprobs
-        logprobs=5,
-        # needed to get logprobs of prompt
-        echo=True,
-    )
+    try:
+        response_dict = openai.Completion.create(
+            model=config.model,
+            prompt=prompt,
+            max_tokens=config.max_tokens,
+            temperature=config.temperature,
+            presence_penalty=config.presence_penalty,
+            frequency_penalty=config.frequency_penalty,
+            top_p=1,
+            n=1,
+            stream=False,
+            stop=[config.stop] if isinstance(config.stop, str) else config.stop,
+            # needed to get logprobs
+            logprobs=5,
+            # needed to get logprobs of prompt
+            echo=True,
+        )
+    except APIError as e:
+        print(f"APIError with prompt: {prompt}")
+        raise e
+
     end_tokens: set[str] = (
         set(config.stop)
         if isinstance(config.stop, list)

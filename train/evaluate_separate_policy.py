@@ -53,7 +53,7 @@ from train.metrics.reward_metric import HelpfulHarmlessEvaluationMetric
 from train.neptune_utils.runs import get_openai_model_from_neptune
 from train.normalizer.reward_normalizer import (
     get_separate_normalizer_from_neptune,
-    RewardNormalizer,
+    RewardNormalizer, DoNothingNormalizer,
 )
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
@@ -343,28 +343,28 @@ def plot_random_reward_evaluations(
     )
 
     harmless_results: ScatterplotResults = plot_scatterplot_and_correlation(
-        x=actual_harmless,
-        y=target_harmless,
+        y=actual_harmless,
+        x=target_harmless,
         title="Harmless",
-        xlabel="Actual",
-        ylabel="Target",
+        ylabel="Actual",
+        xlabel="Target",
     )
 
     helpful_results = plot_scatterplot_and_correlation(
-        x=actual_helpful,
-        y=target_helpful,
+        y=actual_helpful,
+        x=target_helpful,
         title="Helpful",
-        xlabel="Actual",
-        ylabel="Target",
+        ylabel="Actual",
+        xlabel="Target",
     )
 
     # plot Actual helpful vs Actual Harmless
     helpful_vs_harmless_results = plot_scatterplot_and_correlation(
-        x=actual_helpful,
-        y=actual_harmless,
+        y=actual_helpful,
+        x=actual_harmless,
         title="Helpful vs Harmless",
-        xlabel="Actual Helpful",
-        ylabel="Actual Harmless",
+        ylabel="Actual Helpful",
+        xlabel="Actual Harmless",
     )
 
     return HelpfulHarmlessScatterplots(
@@ -506,7 +506,7 @@ def log_results_to_neptune(
 
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
-    run_id = "OF-53"
+    run_id = "OF-8"
     neptune_project = OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
@@ -514,11 +514,7 @@ if __name__ == "__main__":
         neptune_run_id=run_id,
     )
     # Optionally retrieve the normalizer from neptune
-    normalizer = get_separate_normalizer_from_neptune(
-        neptune_api_key=NEPTUNE_KEY,
-        neptune_project_name=neptune_project,
-        neptune_run_id=run_id,
-    )
+    normalizer = DoNothingNormalizer()
     policy_config = OpenaiInferenceConfig(
         model=policy_model_id,  # You can set this manually too
         temperature=1.0,  # try 0.6, 1.0
@@ -531,6 +527,7 @@ if __name__ == "__main__":
     policy_formatter = RewardAtBottomFormatter()
     number_samples = 500
     rollouts_per_prompts = 1
+    print("Starting evaluation")
     evaluations: EvaluationResults = run_evaluation(
         sample_prompts=number_samples,
         rollouts_per_prompt=rollouts_per_prompts,
