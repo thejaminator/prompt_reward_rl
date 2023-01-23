@@ -222,7 +222,9 @@ def plot_linechart(
     # set the x and y axis to (0, 1)
     plot.set(xlim=(0, 1), ylim=(0, 1))
     # make a green line that shows the oracle 1:1 line
-    plot.plot([0, 1], [0, 1], transform=plot.transAxes, ls="--", color="green")
+    plot.plot([0, 1], [0, 1], transform=plot.transAxes, ls="--", color="green", label="Oracle")
+    # Label the blue original line as "Policy"
+    plot.lines[0].set_label("Policy")
     return plot
 
 

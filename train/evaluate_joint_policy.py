@@ -5,6 +5,7 @@ from typing import Optional
 import neptune
 import neptune.new
 import pandas as pd
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from neptune.new import Run
 from neptune.new.types import File
@@ -263,7 +264,7 @@ def plot_random_reward_evaluations_like_paper(
     target = averaged_groups.map(lambda x: x[0])
     actual = averaged_groups.map(lambda x: x[1])
     # in the paper, target is x, actual is y
-    plot: Plot = plot_linechart(
+    plot: Axes = plot_linechart(
         x=target,
         y=actual,
         title="Actual vs Target Reward",
@@ -271,11 +272,23 @@ def plot_random_reward_evaluations_like_paper(
         ylabel="Actual Reward",
     )
     # Add a vertical brown dashed line at ninety_nine_percentile
-    plot.add_vline(x=ninety_nine_percentile, line_dash="dash", line_color="brown")
+    plot.axvline(
+        ninety_nine_percentile,
+        color="brown",
+        linestyle="dashed",
+        label="99th percentile in train",
+    )
     # Add a vertical gray dashed line at one_percentile
-    plot.add_vline(x=one_percentile, line_dash="dash", line_color="gray")
+    plot.axvline(
+        one_percentile,
+        color="gray",
+        linestyle="dashed",
+        label="1st percentile in train",
+    )
+    # Add legends
+    plot.legend()
     # write the plot to a file
-    plot.savefig(f"Actual vs Target Reward.png")
+    plot.figure.savefig(f"Actual vs Target Reward.png")
     return plot.figure
 
 
