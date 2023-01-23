@@ -64,7 +64,7 @@ from train.neptune_utils.runs import get_openai_model_from_neptune
 from train.normalizer.joint_reward_normalizer import (
     JointRewardNormalizer,
     get_joint_normalizer_from_neptune,
-    assert_not_none,
+    assert_not_none, JointDoNothingNormalizer,
 )
 from train.reward_models import DialogueWithJointReward
 from train.separators import END_TOKEN
@@ -232,11 +232,11 @@ def plot_random_reward_evaluations(
     target: Slist[float] = random_rewards_evaluations.map(lambda x: x.target_reward)
     actual: Slist[float] = random_rewards_evaluations.map(lambda x: x.actual_reward)
     results: ScatterplotResults = plot_scatterplot_and_correlation(
-        x=actual,
-        y=target,
+        y=actual,
+        x=target,
         title="Joint reward",
-        xlabel="Actual",
-        ylabel="Target",
+        ylabel="Actual",
+        xlabel="Target",
     )
     return results
 
@@ -386,7 +386,7 @@ def log_results_to_neptune(
 
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
-    run_id = "OF1-27"
+    run_id = "OF1-14"
     project_name = OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
@@ -394,11 +394,7 @@ if __name__ == "__main__":
         neptune_run_id=run_id,
     )
     # Optionally retrieve the normalizer from neptune
-    normalizer = get_joint_normalizer_from_neptune(
-        neptune_api_key=NEPTUNE_KEY,
-        neptune_project_name=OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
-        neptune_run_id="OF1-27",
-    )
+    normalizer = JointDoNothingNormalizer()
     policy_config = OpenaiInferenceConfig(
         model=policy_model_id,  # You can set this manually too
         temperature=1.0,  # try 0.6, 1.0
@@ -407,7 +403,7 @@ if __name__ == "__main__":
         stop=END_TOKEN,
     )
     joint_reward_model = ModelId(
-        "babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26"
+        "babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46"
     )
     policy_formatter = JointRewardAtBottomFormatter()
     number_samples = 500
@@ -417,7 +413,7 @@ if __name__ == "__main__":
         rollouts_per_prompt=rollouts_per_prompts,
         policy_model=policy_config,
         openai_api_key=OPENAI_KEY,
-        test_dataset=TestDataset.HARMLESS_HELPFUL,
+        test_dataset=TestDataset.HELPFUL,
         policy_formatter=policy_formatter,
         joint_reward_model=joint_reward_model,
         normalizer=normalizer,
@@ -429,8 +425,8 @@ if __name__ == "__main__":
     )
     paper_correlation_plot = plot_random_reward_evaluations_like_paper(
         random_rewards_evaluations=evaluations.random_target_rewards,
-        one_percentile=0.2349,
-        ninety_nine_percentile=0.803,
+        one_percentile=0.30,
+        ninety_nine_percentile=0.76,
     )
 
     # save the results to neptune

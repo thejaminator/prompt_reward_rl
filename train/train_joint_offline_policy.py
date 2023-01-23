@@ -4,7 +4,7 @@ from typing import Type
 from neptune.new import Run
 from openai.error import RateLimitError, APIConnectionError
 from retry import retry
-from slist import Slist, identity
+from slist import Slist
 
 from api.logged_fine_tune import (
     logged_fine_tune,
@@ -36,7 +36,7 @@ from train.reward_models import (
     DialogueWithJointReward,
 )
 from train.separators import END_TOKEN
-from train.train_joint_reward_model import get_harmless_helpful_train, get_all_train
+from train.train_joint_reward_model import get_all_train
 
 
 def replace_with_normalized(
@@ -75,7 +75,7 @@ def train(
 ) -> ModelId:
     # Get the prompts
     raw_prompts: Slist[AnthropicRawFormat] = (
-        get_harmless_helpful_train().shuffle(seed="999").take(pair_limit)
+        get_all_train().shuffle(seed="999").take(pair_limit)
     )
     reward_model: ModelId = ModelId(
         "babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26"
@@ -189,5 +189,10 @@ if __name__ == "__main__":
     )
     # export PYTHONPATH=.; python train/train_joint_offline.py
     """
+    For joint model harmless + helpful
     Reward distribution: min=0.09957142308017183 max=0.945666965807259 mean=0.5001174086891287 median=0.4930572037643971 std=0.11485019425837607 one_percentile=0.23494138397650455 five_percentile=0.31770856940167097 twenty_five_percentile=0.4275376902366216 seventy_five_percentile=0.5685117348300421 ninety_five_percentile=0.7037077971606336 ninety_nine_percentile=0.8031785942122077 count=150000
+    
+    For single helpful
+    min=0.19104335545627255 max=0.8914878180557255 mean=0.5126062869094005 median=0.5050833998426019 std=0.10006006577921583 one_percentile=0.30150982711480223 five_percentile=0.3602006440724758 twenty_five_percentile=0.4417482465071431 seventy_five_percentile=0.5765196231041 ninety_five_percentile=0.6935718686438797 ninety_nine_percentile=0.762532192437787 count=20000
     """
+

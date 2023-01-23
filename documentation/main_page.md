@@ -36,12 +36,13 @@ This could help [researchers](https://docs.google.com/document/d/18eqLciwWTnuxbN
 We utilise [Anthropic's](https://github.com/anthropics/hh-rlhf) helpful and harmless dataset.
 The dataset consists of pairs of human labeller dialogue with an AI assistant. The human labeller is asked to choose the more helpful or harmless dialogue.
 
-### Single reward offline training
+### Single joint reward offline training
 We first discuss the results of using a single reward for the policy model.
 Using Anthropic's helpfulness and harmlessness dataset, we train a reward model to predict whether a labeller would choose the given completion from the policy model.
+This reward model outputs a single scalar to encompass both helpfulness and harmlessness. We refer to this as the "joint reward" model. This is as opposed to using two separate reward models for helpfulness and harmlessness, which we will refer to as the "separate reward" models.
 
 Unlike Decision Transformers we do not represent the rewards in separate scalars. 
-Instead, we place the rewards literally as text in the prompt. This allows us to finetune the policy model using the OpenAI finetuning API.
+Instead, we place the joint reward literally as text in the prompt. This allows us to finetune the policy model using the OpenAI finetuning API.
 
 ```
 Human: So my girlfriend wants to leave me. What should I do?
@@ -59,16 +60,29 @@ We then utilise the completion from the dataset for training.
 Assistant: Oh, that's not a good idea! I don't think it's a good idea to get tattoos, and I don't think you should get any tattoos. I think it's more important to focus on improving your relationship with her.
 ```
 
-Fig: Distribution of rewards in the training set.
-The training set consists of 
+Based on experiments conducted, standard scaling the reward in the prompt improves policy model performance. We also found that placing the reward at the bottom of the prompt led to better policy performance than the top of the prompt. 
 
 ### Ability to match a single reward
-Fig: Matching ability over different different epochs
 
-Fig. Correlation of best policy trained on a joint helpful + harmless reward
+#### Policy conditioned on joint reward
 
+| ![scatterplot_single_joint.png](images%2Fscatterplot_single_joint.png)        | ![linechart_single_joint.png](images%2Flinechart_single_joint.png) |
+|-------------------------------------------------------------------------------|--------------------------------------------------------------------|
+| Scatterplot of 500 test prompts, conditioned on uniform random target rewards | Linechart of the same test prompts                                 |
 
-Fig. Correlation of best policy trained solely on helpful rewards
+We train a policy model conditioned on the joint helpful and harmless reward. We then test the model on 500 prompts with a uniform random target reward.
+We observe that the model is able to match the target reward only up to a certain point of reward = 0.6. This corresponds roughly to 1 standard deviation of the offline dataset reward.  
+
+todo: chart of distribution of rewards in the training set.
+
+#### Policy conditioned on pure helpful reward
+
+| ![scatterplot_single_only_helpful.png](images%2Fscatterplot_single_only_helpful.png) | ![linechart_single_only_helpful.png](images%2Flinechart_single_only_helpful.png) |
+|--------------------------------------------------------------------------------------|----------------------------------------------------------------------------------|
+| Scatterplot of 500 test prompts, conditioned on uniform random target rewards        | Linechart of the same test prompts                                               |
+
+We compare to a model conditioned on the helpfulness reward only. We evaluate its performance on prompts from the helpful dataset only.
+This results to a simpler task for the policy, since we only aim for it to be helpful, rather than helpfulness and harmless at the same time.
 
 
 ### Maximizing the reward
