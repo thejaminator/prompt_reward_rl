@@ -1,3 +1,11 @@
+### Maximizing the joint reward
+Fig: Maximum reward. Compare to vanilla, BC, offline, online
+
+Policy conditioned on joint reward achieves 0.66 average reward, which corresponds to the 90th percentile of the offline training rewards.
+
+### Online training for joint reward
+Fig: offline vs online
+
 #### Does duplicating the reward tokens in the prompt help?
 Our preliminary results show that it does not help.
 TODO: Plot graph
@@ -7,6 +15,9 @@ TODO: Plot graph
 
 #### Training efficiency
 How could we estimate KLD and reward's relationship here?
+
+
+
 
 
 # Outline

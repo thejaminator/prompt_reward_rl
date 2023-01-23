@@ -81,36 +81,22 @@ todo: chart of distribution of rewards in the training set.
 |--------------------------------------------------------------------------------------|----------------------------------------------------------------------------------|
 | Scatterplot of 500 test prompts, conditioned on uniform random target rewards        | Linechart of the same test prompts                                               |
 
-We compare to a model conditioned on the helpfulness reward only. We evaluate its performance on prompts from the helpful dataset only.
+We compare to a policy conditioned on the helpfulness reward only. We evaluate its performance on prompts from the helpful dataset only.
 This results to a simpler task for the policy, since we only aim for it to be helpful, rather than helpfulness and harmless at the same time.
-
-
-### Maximizing the reward
-Fig: Maximum reward. Compare to vanilla, BC, offline, online
-
-Offline model achieves 0.66 average reward, which corresponds to the 90th percentile of the offline training rewards.
-
-
-### Online training
-Fig: offline vs online
-
-
 
 
 ### Separate reward models
 We then train two separate harmless and helpful reward models using the same dataset.
-We then use the reward models to generate rewards for each dialogue.
-These rewards are placed in the prompt for training the policy model.
 
 
 ### Ability to match separate target rewards
-We evaluate the ability of the policy model to match the target reward.
+We evaluate the ability of the policy model to match the target rewards.
 
 | ![harmless_plot_temp_1.png](images%2Fharmless_plot_temp_1.png) | ![helpful_plot_temp_1.png](images%2Fhelpful_plot_temp_1.png) |
 |----------------------------------------------------------------|--------------------------------------------------------------|
 
 
-Preliminary results from training a babbage sized model show that the policy model seems to match the desired target for helpfulness.
+The policy model seemed to match the desired target for helpfulness initially.
 However, we find that the policy model often sacrifices harmlessness for helpfulness. See section "Does it work to maximize both rewards?".
 
 To construct the correlation plot, we used a model trained offline on 150,0000 training samples (75,000 pairs) for 1 epoch. 
