@@ -37,6 +37,9 @@ def get_online_and_rejection_sampling_train() -> Slist[AnthropicRawFormat]:
     print(f"Loaded {len(rejected_sampled_train)} rejected sampled train pairs")
     return online_train + rejected_sampled_train
 
+def get_all_train() -> Slist[AnthropicRawFormat]:
+    return get_harmless_helpful_train() + get_online_and_rejection_sampling_train()
+
 
 def format_raw_into_prompt_completion(
     raw: AnthropicRawFormat,
@@ -60,7 +63,7 @@ def format_raw_into_prompt_completion(
 
 
 def main():
-    limit = 100000
+    limit = 99999999999
     harmless_helpful_train = get_harmless_helpful_train()
     online_and_rejection_sampling_train = get_online_and_rejection_sampling_train()
     all_train = harmless_helpful_train + online_and_rejection_sampling_train
@@ -77,8 +80,8 @@ def main():
         model="babbage",
         n_epochs=1,
         learning_rate_multiplier=0.1,
-        batch_size=256,
-        prompt_loss_weight=0.1,
+        batch_size=32,
+        prompt_loss_weight=0.0,
     )
     logged_fine_tune(
         train=limited_pairs.flatten_list(),

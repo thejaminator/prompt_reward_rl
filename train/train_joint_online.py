@@ -30,7 +30,7 @@ from train.evaluate_joint_offline import (
     get_policy_single_evaluation,
     JointEvaluationWithGPTResponse,
     JointEvaluationMetric,
-    plot_random_reward_evaluations,
+    plot_random_reward_evaluations, plot_random_reward_evaluations_like_paper,
 )
 from train.joint_policy_prompt_formatter import (
     JointPolicyPromptInfo,

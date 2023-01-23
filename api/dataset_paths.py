@@ -9,8 +9,12 @@ anthropic_helpful_test_path: Path = Path("datasets/anthropic/helpful-base-test.j
 anthropic_online_train_path: Path = Path(
     "datasets/anthropic/helpful-online-train.jsonl"
 )
+anthropic_online_test_path: Path = Path("datasets/anthropic/helpful-online-test.jsonl")
 anthropic_rejection_sampled_train_path: Path = Path(
     "datasets/anthropic/helpful-rejection-sampled-train.jsonl"
+)
+anthropic_rejection_sampled_test_path: Path = Path(
+    "datasets/anthropic/helpful-rejection-sampled-test.jsonl"
 )
 moderated_harmless_rejected = Path(
     "datasets/processed/moderated-helpful-base-train.jsonl"

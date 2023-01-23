@@ -3,8 +3,14 @@ from typing import Optional
 
 from slist import Slist
 
-from api.dataset_paths import anthropic_harmless_test_path, anthropic_helpful_test_path
+from api.dataset_paths import (
+    anthropic_harmless_test_path,
+    anthropic_helpful_test_path,
+    anthropic_online_test_path,
+    anthropic_rejection_sampled_test_path,
+)
 from api.set_key import set_openai_key
+from api.type_check import should_not_happen
 from evaluate.classification import get_pair_predicted_result, PairPrediction
 from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
 from settings import OPENAI_KEY
@@ -30,10 +36,25 @@ def get_harmless_helpful_test() -> Slist[AnthropicRawFormat]:
     return get_harmless_test() + get_helpful_test()
 
 
+def get_online_rejection_sampled_test() -> Slist[AnthropicRawFormat]:
+    online_test: Slist[AnthropicRawFormat] = get_raw_anthropic(
+        anthropic_online_test_path
+    )
+    print(f"Loaded {len(online_test)} online test examples")
+    rejection_sampled_test: Slist[AnthropicRawFormat] = get_raw_anthropic(
+        anthropic_rejection_sampled_test_path
+    )
+    print(f"Loaded {len(rejection_sampled_test)} rejection sampled test examples")
+    return online_test + rejection_sampled_test
+
+def get_all_test_dataset() -> Slist[AnthropicRawFormat]:
+    return get_harmless_helpful_test() + get_online_rejection_sampled_test()
+
 class TestDataset(str, Enum):
     HARMLESS = "harmless"
     HELPFUL = "helpful"
     HARMLESS_HELPFUL = "harmless_helpful"
+    ALL = "all"
 
 
 def plot_distribution_chosen(predictions: Slist[float]) -> None:
@@ -53,17 +74,23 @@ def main(limit: int, model_id: str, openai_api_key: str, test_dataset: TestDatas
     all_test = (
         get_harmless_helpful_test()
         if test_dataset == TestDataset.HARMLESS_HELPFUL
-        else (
-            get_harmless_test()
-            if test_dataset == TestDataset.HARMLESS
-            else get_helpful_test()
-        )
+        else get_harmless_test()
+        if test_dataset == TestDataset.HARMLESS
+        else get_helpful_test()
+        if test_dataset == TestDataset.HELPFUL
+        else get_all_test_dataset()
+        if test_dataset == TestDataset.ALL
+        else should_not_happen()
     )
     sample = all_test.shuffle(seed="123").take(limit)
     # Get the predictions
-    predictions: Slist[PairPrediction] = sample.map(lambda pair: get_pair_predicted_result(model_id, pair))
+    predictions: Slist[PairPrediction] = sample.map(
+        lambda pair: get_pair_predicted_result(model_id, pair)
+    )
     # Calculate the accuracy
-    accuracy: Optional[float] = predictions.map(lambda x: x.is_chosen_higher_proba).average()
+    accuracy: Optional[float] = predictions.map(
+        lambda x: x.is_chosen_higher_proba
+    ).average()
     print(f"Accuracy: {accuracy} for {model_id} on {limit} samples")
     # Plot the distribution of predictions for the chosen
     plot_distribution_chosen(predictions.map(lambda x: x.chosen_proba))
@@ -80,11 +107,15 @@ if __name__ == "__main__":
     # Joint model on 10k pairs babbage:ft-leadiq:assistant-reward-model-2022-12-19-15-51-58 0.6
     # Helpful model on 43835 pairs babbage:ft-leadiq:helpful-reward-2022-12-22-08-04-46 0.721 on helpful, 0.34 for harmless
     # Harmless model on 42537 pairs babbage:ft-leadiq:harmless-reward-2022-12-22-08-55-12 0.717 on harmless
+
+    # Joint model on base, online,rejection pairs "babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26
+    # 0.595
+
     main(
         limit=400,
         model_id="babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26",
         openai_api_key=OPENAI_KEY,
-        test_dataset=TestDataset.HARMLESS_HELPFUL,
+        test_dataset=TestDataset.ALL,
     )
 
     # 1,102,676 tokens for 6122 requests (samples)

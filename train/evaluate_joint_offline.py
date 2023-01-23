@@ -44,6 +44,7 @@ from train.evaluate_offline import (
     ScatterplotResults,
     plot_scatterplot_and_correlation,
     TextWithRolloutNumber,
+    plot_linechart,
 )
 from train.evaluate_reward_model import (
     TestDataset,
@@ -57,7 +58,11 @@ from train.joint_policy_prompt_formatter import (
     JointRewardAtBottomFormatter,
 )
 from train.neptune_utils.runs import get_openai_model_from_neptune
-from train.normalizer.joint_reward_normalizer import JointRewardNormalizer, get_joint_normalizer_from_neptune
+from train.normalizer.joint_reward_normalizer import (
+    JointRewardNormalizer,
+    get_joint_normalizer_from_neptune,
+    assert_not_none,
+)
 from train.reward_models import DialogueWithJointReward
 from train.separators import END_TOKEN
 
@@ -88,22 +93,22 @@ def get_policy_single_evaluation(
     prompt_formatter: JointPolicyPromptFormatter,
     cached: bool = True,
 ) -> JointEvaluationWithGPTResponse:
-    normalizd_target_reward: float = normalizer.normalize_reward(dialogue_with_reward.target_reward)
+    normalizd_target_reward: float = normalizer.normalize_reward(
+        dialogue_with_reward.target_reward
+    )
     new_dialogue_with_reward = dialogue_with_reward.copy()
     new_dialogue_with_reward.target_reward = normalizd_target_reward
-    prompt_info: JointPolicyPromptInfo = prompt_formatter.dialogue_reward_to_prompt_completion(
-        with_reward=new_dialogue_with_reward
+    prompt_info: JointPolicyPromptInfo = (
+        prompt_formatter.dialogue_reward_to_prompt_completion(
+            with_reward=new_dialogue_with_reward
+        )
     )
     policy_prompt = prompt_info.to_prompt_completion().prompt
     # rollout the policy
     policy_completion: GPTFullResponse = (
-        cached_get_openai_completion(
-            prompt=policy_prompt, config=policy_model
-        )
+        cached_get_openai_completion(prompt=policy_prompt, config=policy_model)
         if cached
-        else get_openai_completion(
-            prompt=policy_prompt, config=policy_model
-        )
+        else get_openai_completion(prompt=policy_prompt, config=policy_model)
     )
     # You need to get the prompt that does not have the target reward, and add the completion
     dialogue = (
@@ -233,6 +238,36 @@ def plot_random_reward_evaluations(
     return results
 
 
+def to_nearest_zero_point_zero_five(x: float) -> float:
+    assert x >= 0
+    assert x <= 1
+    return (round(x * 100 / 5) * 5) / 100
+
+
+def plot_random_reward_evaluations_like_paper(
+    random_rewards_evaluations: Slist[JointEvaluationMetric],
+) -> None:
+    # Try to create a plot like the decision transformer's paper
+    tups: Slist[
+        tuple[float, Slist[JointEvaluationMetric]]
+    ] = random_rewards_evaluations.group_by(
+        lambda x: to_nearest_zero_point_zero_five(x.target_reward)
+    )
+    averaged_groups: Slist[tuple[float, float]] = tups.map(
+        lambda x: (x[0], assert_not_none(x[1].map(lambda y: y.actual_reward).average()))
+    )
+    target = averaged_groups.map(lambda x: x[0])
+    actual = averaged_groups.map(lambda x: x[1])
+    # in the paper, target is x, actual is y
+    plot_linechart(
+        x=target,
+        y=actual,
+        title="Actual vs Target Reward",
+        xlabel="Target Reward",
+        ylabel="Actual Reward",
+    )
+
+
 def log_results_to_neptune(
     scatter_plots: ScatterplotResults,
     neptune_api_key: str,
@@ -323,11 +358,9 @@ def log_results_to_neptune(
         run.stop()
 
 
-
-
 if __name__ == "__main__":
     # Optionally retrieve the openai model id from neptune
-    run_id = "ON-95"
+    run_id = "ON-107"
     project_name = ONLINE_POLICY_NEPTUNE_PROJECT
     policy_model_id = get_openai_model_from_neptune(
         neptune_api_key=NEPTUNE_KEY,
@@ -366,6 +399,9 @@ if __name__ == "__main__":
 
     # plot the results
     scatter_plots: ScatterplotResults = plot_random_reward_evaluations(
+        random_rewards_evaluations=evaluations.random_target_rewards
+    )
+    plot_random_reward_evaluations_like_paper(
         random_rewards_evaluations=evaluations.random_target_rewards
     )
 

@@ -7,7 +7,9 @@ from typing import Callable, Sequence, Optional
 import neptune.new
 import pandas
 from neptune.new.metadata_containers import Run
+from openai.error import APIConnectionError
 from openai.validators import get_common_xfix
+from retry import retry
 
 from api.openai_fine_tune import (
     ModelId,
@@ -70,7 +72,7 @@ class AlwaysContinueHandler(ShouldContinueHandler):
     def should_continue(self, training_data_path: Path) -> bool:
         return True
 
-
+@retry(exceptions=(APIConnectionError), tries=2, delay=30)
 def logged_fine_tune(
     train: Sequence[PromptCompletion],
     params: FineTuneParams,

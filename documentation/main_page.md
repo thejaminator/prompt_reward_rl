@@ -65,6 +65,11 @@ The training set consists of
 ### Ability to match a single reward
 Fig: Matching ability over different different epochs
 
+Fig. Correlation of best policy trained on a joint helpful + harmless reward
+
+
+Fig. Correlation of best policy trained solely on helpful rewards
+
 
 ### Maximizing the reward
 Fig: Maximum reward. Compare to vanilla, BC, offline, online

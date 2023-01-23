@@ -50,7 +50,10 @@ from train.evaluate_reward_model import (
 )
 from train.metrics.reward_metric import HelpfulHarmlessEvaluationMetric
 from train.neptune_utils.runs import get_openai_model_from_neptune
-from train.normalizer.reward_normalizer import get_separate_normalizer_from_neptune, RewardNormalizer
+from train.normalizer.reward_normalizer import (
+    get_separate_normalizer_from_neptune,
+    RewardNormalizer,
+)
 from train.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
@@ -80,25 +83,22 @@ def get_policy_single_evaluation(
     normalized_policy_prompt.target_reward = normalizer.normalize_reward(
         normalized_policy_prompt.target_reward
     )
-    formatted: PolicyPromptInfo = policy_formatter.dialogue_reward_to_prompt_completion(normalized_policy_prompt)
-
+    formatted: PolicyPromptInfo = policy_formatter.dialogue_reward_to_prompt_completion(
+        normalized_policy_prompt
+    )
 
     policy_prompt = formatted.to_prompt_completion().prompt
     # rollout the policy
     policy_completion: GPTFullResponse = (
-        cached_get_openai_completion(
-            prompt=policy_prompt, config=policy_model
-        )
+        cached_get_openai_completion(prompt=policy_prompt, config=policy_model)
         if cached
-        else get_openai_completion(
-            prompt=policy_prompt, config=policy_model
-        )
+        else get_openai_completion(prompt=policy_prompt, config=policy_model)
     )
     # You need to get the prompt that does not have the target reward, and add the completion
     dialogue = (
-            formatted.dialogue_without_reward_without_completion
-            + "\n\n"
-            + policy_completion.completion
+        formatted.dialogue_without_reward_without_completion
+        + "\n\n"
+        + policy_completion.completion
     )
     formatted_reward_prompt: PromptForRewardModel = format_dialogue_into_reward_prompt(
         dialogue
@@ -199,6 +199,33 @@ def plot_scatterplot_and_correlation(
         upper_correlation_bound=upper_bound,
         lower_correlation_bound=lower_bound,
     )
+
+
+def plot_linechart(
+    x: List[float], y: List[float], title: str, xlabel: str, ylabel: str
+) -> Figure:
+    # plots a line chart
+    # clear seaborn
+    sns.reset_orig()
+    f, axes = plt.subplots(1)
+    # use seaborn style defaults and set the default figure size
+    sns.set(rc={"figure.figsize": (8, 8)})
+    # use x and y as the data, assign to the variables called x and y
+    # use the function lineplot to make a line chart
+    # pass axes so you don't overwrite the same plots
+    plot = sns.lineplot(x=x, y=y, ax=axes)
+    # set a title for the line chart
+    plot.figure.suptitle(title)
+    # set the labels for the x and y axes
+    plot.set(xlabel=xlabel, ylabel=ylabel)
+    # set the x and y axis to (0, 1)
+    plot.set(xlim=(0, 1), ylim=(0, 1))
+    figure = plot.figure
+    # make a green line that shows the oracle 1:1 line
+    plot.plot([0, 1], [0, 1], transform=plot.transAxes, ls="--", color="green")
+    # write the plot to a file
+    figure.savefig(f"{title}.png")
+    return figure
 
 
 class EvaluationResults(BaseModel):

@@ -34,7 +34,7 @@ from train.reward_models import (
     DialogueWithJointReward,
 )
 from train.separators import END_TOKEN
-from train.train_joint_reward_model import get_harmless_helpful_train
+from train.train_joint_reward_model import get_harmless_helpful_train, get_all_train
 
 
 def replace_with_normalized(
@@ -73,7 +73,7 @@ def train(
 ) -> ModelId:
     # Get the prompts
     raw_prompts: Slist[AnthropicRawFormat] = (
-        get_harmless_helpful_train().shuffle(seed="999").take(pair_limit)
+        get_all_train().shuffle(seed="999").take(pair_limit)
     )
     reward_model: ModelId = ModelId(
         "babbage:ft-leadiq:assistant-reward-model-2022-12-20-09-34-26"
@@ -178,10 +178,10 @@ def train(
 if __name__ == "__main__":
     policy_formatter = JointRewardAtBottomFormatter()
     finetune_params = FineTuneParams(
-        model="babbage:ft-leadiq:thejaminator-offline-joint-policy-2023-01-20-04-02-18",
+        model="babbage:ft-leadiq:leadiq-assistant-reward-model-2023-01-20-08-40-43",
         n_epochs=1,
-        learning_rate_multiplier=0.05,
-        batch_size=128,
+        learning_rate_multiplier=0.1,
+        batch_size=32,
         prompt_loss_weight=0.1,
     )
     # Run the main function
@@ -189,7 +189,7 @@ if __name__ == "__main__":
     normalizer_type = JointStandardScaleNormalizer
     train(
         policy_formatter,
-        pair_limit=75000,
+        pair_limit=2000000,
         finetune_params=finetune_params,
         chunks=999999,
         normalizer_type=normalizer_type,
