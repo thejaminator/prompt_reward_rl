@@ -89,9 +89,9 @@ def main():
         n_epochs=1,
         learning_rate_multiplier=0.1,
         batch_size=32,
-        prompt_loss_weight=0.0,
+        prompt_loss_weight=0.1,
     )
-    training_chunks: Slist[Slist[PromptCompletion]] = limited_pairs.split_into_n(2)
+    training_chunks: Slist[Slist[PromptCompletion]] = limited_pairs.split_into_n(1)
     updated_fine_tune_params: FineTuneParams = finetune_params.copy()
     for idx, chunk in training_chunks.enumerated():
         if idx >= 1:
