@@ -1,6 +1,6 @@
 import random
 
-from train.reward_models import (
+from train.rewards import (
     DialogueWithReward,
     HelpfulHarmlessReward,
     DialogueWithJointReward,

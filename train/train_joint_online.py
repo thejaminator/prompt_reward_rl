@@ -15,7 +15,7 @@ from api.logged_fine_tune import logged_fine_tune, AlwaysContinueHandler
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
 from api.type_check import should_not_happen
-from evaluate.inference import OpenaiInferenceConfig, GPTFullResponse, FinishReasons
+from api.inference import OpenaiInferenceConfig, GPTFullResponse, FinishReasons
 from parsing.parse_raw import AnthropicRawFormat
 from settings import (
     ONLINE_POLICY_NEPTUNE_PROJECT,
@@ -26,27 +26,25 @@ from settings import (
 from train.assign_rewards import (
     assign_joint_target_reward,
 )
-from train.evaluate_joint_policy import (
+from evaluate.evaluate_joint_policy import (
     get_policy_single_evaluation,
     JointEvaluationWithGPTResponse,
     JointEvaluationMetric,
-    plot_random_reward_evaluations, plot_random_reward_evaluations_like_paper,
-)
-from train.joint_policy_prompt_formatter import (
+    plot_random_reward_evaluations, )
+from train.prompt_formatters.joint_policy_prompt_formatter import (
     JointPolicyPromptInfo,
     JointPolicyPromptFormatter,
     JointRewardAtBottomFormatter,
 )
-from train.neptune_utils.runs import get_openai_model_from_neptune
 from train.normalizer.joint_reward_normalizer import (
     JointRewardNormalizer,
     get_joint_normalizer_from_neptune,
 )
-from train.reward_models import (
+from train.rewards import (
     DialogueWithJointReward,
 )
 from train.separators import END_TOKEN
-from train.train_online import get_online_prompts
+from train.train_separate_online import get_online_prompts
 
 
 class TargetRewardSampler(ABC):

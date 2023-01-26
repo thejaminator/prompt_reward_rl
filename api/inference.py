@@ -47,7 +47,6 @@ class GPTFullResponse(BaseModel):
     completion: str
     prompt_token_infos: SlistPydantic[TokenInfo]
     completion_token_infos: SlistPydantic[TokenInfo]
-    # so we can view this in mongo easily
     completion_total_log_prob: float
     average_completion_total_log_prob: Optional[float]
     finish_reason: FinishReasons

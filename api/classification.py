@@ -6,16 +6,16 @@ from pydantic import BaseModel
 from retry import retry
 
 from api.redis_cache import redis_cache
-from evaluate.inference import OpenaiInferenceConfig, get_openai_completion, TokenProba
+from api.inference import OpenaiInferenceConfig, get_openai_completion, TokenProba
 from parsing.parse_raw import AnthropicRawFormat
-from train.separators import end_prompt_seperator, POSITIVE_TOKEN, NEGATIVE_TOKEN
+from train.separators import END_PROMPT_SEPARATOR, POSITIVE_TOKEN, NEGATIVE_TOKEN
 
 # A prompt that has been formatted properly for the reward model
 PromptForRewardModel = NewType("PromptForRewardModel", str)
 
 
 def format_dialogue_into_reward_prompt(conversation: str) -> PromptForRewardModel:
-    return PromptForRewardModel(conversation.strip() + end_prompt_seperator)
+    return PromptForRewardModel(conversation.strip() + END_PROMPT_SEPARATOR)
 
 
 @retry(exceptions=(RateLimitError,APIConnectionError, Timeout), tries=5, delay=20)

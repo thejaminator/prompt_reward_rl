@@ -1,10 +1,10 @@
-from train.policy_prompt_formatter import (
+from train.prompt_formatters.policy_prompt_formatter import (
     RewardAtBottomFormatter,
     RewardAtTopFormatter,
     DuplicateRewardAtBottomFormatter,
     NoRewardFormatter, split_last_assistant_response,
 )
-from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
+from train.rewards import HelpfulHarmlessReward, DialogueWithReward
 
 
 def test_reward_at_bottom():

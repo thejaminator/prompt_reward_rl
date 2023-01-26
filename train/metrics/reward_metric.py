@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from train.reward_models import HelpfulHarmlessReward
+from train.rewards import HelpfulHarmlessReward
 
 
 class HelpfulHarmlessEvaluationMetric(BaseModel):

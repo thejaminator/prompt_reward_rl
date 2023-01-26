@@ -7,10 +7,10 @@ from slist import Slist
 from api.prompt_completion import PromptCompletion
 from train.separators import (
     START_REWARD_SEPARATOR,
-    end_prompt_seperator,
+    END_PROMPT_SEPARATOR,
     END_REWARD_SEPARATOR,
 )
-from train.reward_models import DialogueWithReward, HelpfulHarmlessReward
+from train.rewards import DialogueWithReward, HelpfulHarmlessReward
 
 
 class PolicyPromptInfo(BaseModel):
@@ -77,15 +77,15 @@ class RewardAtBottomFormatter(PolicyPromptFormatter):
         )
 
         dialogue_with_reward: str = (
-            before_last_lines_formatted
-            + "\n"
-            + START_REWARD_SEPARATOR
-            + "\n"
-            + f"Helpful reward: {helpful_reward_2dp}"
-            + "\n"
-            + f"Harmless reward: {harmless_reward_2dp}"
-            + end_prompt_seperator
-            + "\n\n"
+                before_last_lines_formatted
+                + "\n"
+                + START_REWARD_SEPARATOR
+                + "\n"
+                + f"Helpful reward: {helpful_reward_2dp}"
+                + "\n"
+                + f"Harmless reward: {harmless_reward_2dp}"
+                + END_PROMPT_SEPARATOR
+                + "\n\n"
         )
         completion = last_line
         return PolicyPromptInfo(
@@ -123,15 +123,15 @@ class RewardAtBottomTimes100Formatter(PolicyPromptFormatter):
         )
 
         dialogue_with_reward: str = (
-            before_last_lines_formatted
-            + "\n"
-            + START_REWARD_SEPARATOR
-            + "\n"
-            + f"Helpful reward: {helpful_reward_times_100}"
-            + "\n"
-            + f"Harmless reward: {harmless_reward_times_100}"
-            + end_prompt_seperator
-            + "\n\n"
+                before_last_lines_formatted
+                + "\n"
+                + START_REWARD_SEPARATOR
+                + "\n"
+                + f"Helpful reward: {helpful_reward_times_100}"
+                + "\n"
+                + f"Harmless reward: {harmless_reward_times_100}"
+                + END_PROMPT_SEPARATOR
+                + "\n\n"
         )
         completion = last_line
         return PolicyPromptInfo(
@@ -178,15 +178,15 @@ class DuplicateRewardAtBottomFormatter(PolicyPromptFormatter):
         )
 
         dialogue_with_reward: str = (
-            before_last_lines_formatted
-            + "\n"
-            + START_REWARD_SEPARATOR
-            + "\n"
-            + f"Helpful reward: {helpful_reward_2dp}"
-            + "\n"
-            + f"Harmless reward: {harmless_reward_2dp}"
-            + end_prompt_seperator
-            + "\n\n"
+                before_last_lines_formatted
+                + "\n"
+                + START_REWARD_SEPARATOR
+                + "\n"
+                + f"Helpful reward: {helpful_reward_2dp}"
+                + "\n"
+                + f"Harmless reward: {harmless_reward_2dp}"
+                + END_PROMPT_SEPARATOR
+                + "\n\n"
         )
         completion = last_line
         return PolicyPromptInfo(
@@ -227,17 +227,17 @@ class RewardAtTopFormatter(PolicyPromptFormatter):
         )
 
         dialogue_with_reward: str = (
-            START_REWARD_SEPARATOR
-            + "\n"
-            + f"Helpful reward: {helpful_reward_2dp}"
-            + "\n"
-            + f"Harmless reward: {harmless_reward_2dp}"
-            + END_REWARD_SEPARATOR
-            + "\n"
-            + before_last_lines_formatted
-            + "\n"
-            + end_prompt_seperator
-            + "\n\n"
+                START_REWARD_SEPARATOR
+                + "\n"
+                + f"Helpful reward: {helpful_reward_2dp}"
+                + "\n"
+                + f"Harmless reward: {harmless_reward_2dp}"
+                + END_REWARD_SEPARATOR
+                + "\n"
+                + before_last_lines_formatted
+                + "\n"
+                + END_PROMPT_SEPARATOR
+                + "\n\n"
         )
         completion = last_line
         return PolicyPromptInfo(
@@ -272,7 +272,7 @@ class NoRewardFormatter(PolicyPromptFormatter):
         before_last_lines_formatted = "\n\n".join(before_last_lines)
 
         dialogue_with_reward: str = (
-            before_last_lines_formatted + "\n" + end_prompt_seperator + "\n\n"
+                before_last_lines_formatted + "\n" + END_PROMPT_SEPARATOR + "\n\n"
         )
         completion = last_line
         return PolicyPromptInfo(

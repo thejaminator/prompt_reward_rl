@@ -14,7 +14,7 @@ from api.logged_fine_tune import (
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
 from api.redis_cache import redis_cache
-from evaluate.classification import (
+from api.classification import (
     format_dialogue_into_reward_prompt,
     get_positive_class_proba,
 )
@@ -24,11 +24,11 @@ from settings import (
     REWARD_NORMALIZER_NEPTUNE_KEY,
 )
 from train.normalizer.reward_normalizer import RewardNormalizer, StandardScaleNormalizer
-from train.policy_prompt_formatter import (
+from train.prompt_formatters.policy_prompt_formatter import (
     PolicyPromptFormatter,
     RewardAtBottomFormatter,
 )
-from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
+from train.rewards import HelpfulHarmlessReward, DialogueWithReward
 from train.separators import END_TOKEN
 from train.train_joint_reward_model import get_harmless_helpful_train
 

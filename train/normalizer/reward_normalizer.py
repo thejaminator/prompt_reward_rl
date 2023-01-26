@@ -8,7 +8,7 @@ from api.prompt_completion import PromptCompletion
 from settings import REWARD_NORMALIZER_NEPTUNE_KEY
 from train.metrics.reward_metric import HelpfulHarmlessEvaluationMetric
 from train.neptune_utils.runs import get_neptune_run
-from train.reward_models import HelpfulHarmlessReward
+from train.rewards import HelpfulHarmlessReward
 
 
 class RewardNormalizer(ABC):

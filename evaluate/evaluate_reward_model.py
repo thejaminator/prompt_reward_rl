@@ -11,7 +11,7 @@ from api.dataset_paths import (
 )
 from api.set_key import set_openai_key
 from api.type_check import should_not_happen
-from evaluate.classification import get_pair_predicted_result, PairPrediction
+from api.classification import get_pair_predicted_result, PairPrediction
 from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
 from settings import OPENAI_KEY
 from train.metrics.training_distribution import (

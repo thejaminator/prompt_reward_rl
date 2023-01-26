@@ -22,12 +22,12 @@ from slist.pydantic_compat import SlistPydantic
 
 from api.openai_fine_tune import ModelId
 from api.set_key import set_openai_key
-from evaluate.classification import (
+from api.classification import (
     format_dialogue_into_reward_prompt,
     get_positive_class_proba,
     PromptForRewardModel,
 )
-from evaluate.inference import (
+from api.inference import (
     GPTFullResponse,
     OpenaiInferenceConfig,
     cached_get_openai_completion,
@@ -43,7 +43,7 @@ from train.assign_rewards import (
     assign_random_separate_target_reward,
     assign_high_separate_target_reward,
 )
-from train.evaluate_reward_model import (
+from evaluate.evaluate_reward_model import (
     TestDataset,
     get_harmless_helpful_test,
     get_harmless_test,
@@ -52,15 +52,14 @@ from train.evaluate_reward_model import (
 from train.metrics.reward_metric import HelpfulHarmlessEvaluationMetric
 from train.neptune_utils.runs import get_openai_model_from_neptune
 from train.normalizer.reward_normalizer import (
-    get_separate_normalizer_from_neptune,
     RewardNormalizer, DoNothingNormalizer,
 )
-from train.policy_prompt_formatter import (
+from train.prompt_formatters.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
     RewardAtBottomFormatter,
 )
-from train.reward_models import DialogueWithReward
+from train.rewards import DialogueWithReward
 from train.separators import END_TOKEN
 
 

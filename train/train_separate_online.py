@@ -13,11 +13,11 @@ from api.dataset_paths import anthropic_online_train_path
 from api.logged_fine_tune import logged_fine_tune, AlwaysContinueHandler
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.type_check import should_not_happen
-from evaluate.inference import OpenaiInferenceConfig, GPTFullResponse
+from api.inference import OpenaiInferenceConfig, GPTFullResponse
 from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
 from settings import ONLINE_POLICY_NEPTUNE_PROJECT
 from train.assign_rewards import assign_separate_target_reward
-from train.evaluate_separate_policy import (
+from evaluate.evaluate_separate_policy import (
     get_policy_single_evaluation,
     EvaluationWithGPTResponse,
 )
@@ -26,12 +26,12 @@ from train.normalizer.reward_normalizer import (
     RewardNormalizer,
     OnlineTrainingData, DoNothingNormalizer,
 )
-from train.policy_prompt_formatter import (
+from train.prompt_formatters.policy_prompt_formatter import (
     PolicyPromptFormatter,
     PolicyPromptInfo,
     RewardAtBottomFormatter,
 )
-from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
+from train.rewards import HelpfulHarmlessReward, DialogueWithReward
 from train.separators import END_TOKEN
 
 

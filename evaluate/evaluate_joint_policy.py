@@ -1,5 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 import neptune
@@ -7,23 +6,21 @@ import neptune.new
 import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from neptune.new import Run
 from neptune.new.types import File
 from openai.error import RateLimitError, APIConnectionError
 from pydantic import BaseModel
 from retry import retry
-from seaborn._core.plot import Plot
 from slist import Slist
 from slist.pydantic_compat import SlistPydantic
 
 from api.openai_fine_tune import ModelId
 from api.set_key import set_openai_key
-from evaluate.classification import (
+from api.classification import (
     format_dialogue_into_reward_prompt,
     get_positive_class_proba,
     PromptForRewardModel,
 )
-from evaluate.inference import (
+from api.inference import (
     GPTFullResponse,
     OpenaiInferenceConfig,
     cached_get_openai_completion,
@@ -33,29 +30,26 @@ from parsing.parse_raw import AnthropicRawFormat
 from settings import (
     OPENAI_KEY,
     NEPTUNE_KEY,
-    OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
-    MODEL_ID_NEPTUNE_KEY,
     OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT,
-    ONLINE_POLICY_NEPTUNE_PROJECT,
 )
 from train.assign_rewards import (
     assign_random_joint_target_reward,
     assign_high_joint_target_reward,
 )
-from train.evaluate_separate_policy import (
+from evaluate.evaluate_separate_policy import (
     extend_with_rollout_number,
     ScatterplotResults,
     plot_scatterplot_and_correlation,
     TextWithRolloutNumber,
     plot_linechart,
 )
-from train.evaluate_reward_model import (
+from evaluate.evaluate_reward_model import (
     TestDataset,
     get_helpful_test,
     get_harmless_test,
     get_harmless_helpful_test,
 )
-from train.joint_policy_prompt_formatter import (
+from train.prompt_formatters.joint_policy_prompt_formatter import (
     JointPolicyPromptInfo,
     JointPolicyPromptFormatter,
     JointRewardAtBottomFormatter,
@@ -63,10 +57,9 @@ from train.joint_policy_prompt_formatter import (
 from train.neptune_utils.runs import get_openai_model_from_neptune
 from train.normalizer.joint_reward_normalizer import (
     JointRewardNormalizer,
-    get_joint_normalizer_from_neptune,
     assert_not_none, JointDoNothingNormalizer,
 )
-from train.reward_models import DialogueWithJointReward
+from train.rewards import DialogueWithJointReward
 from train.separators import END_TOKEN
 
 

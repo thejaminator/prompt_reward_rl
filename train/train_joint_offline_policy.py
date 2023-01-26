@@ -14,7 +14,7 @@ from api.logged_fine_tune import (
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
 from api.redis_cache import redis_cache
-from evaluate.classification import (
+from api.classification import (
     format_dialogue_into_reward_prompt,
     get_positive_class_proba,
 )
@@ -22,7 +22,7 @@ from parsing.parse_raw import AnthropicRawFormat
 from settings import (
     OFFLINE_JOINT_POLICY_NEPTUNE_PROJECT, REWARD_NORMALIZER_NEPTUNE_KEY,
 )
-from train.joint_policy_prompt_formatter import (
+from train.prompt_formatters.joint_policy_prompt_formatter import (
     JointPolicyPromptFormatter,
     JointRewardAtBottomFormatter,
 )
@@ -32,7 +32,7 @@ from train.normalizer.joint_reward_normalizer import (
     JointRewardNormalizer,
     JointStandardScaleNormalizer,
 )
-from train.reward_models import (
+from train.rewards import (
     DialogueWithJointReward,
 )
 from train.separators import END_TOKEN

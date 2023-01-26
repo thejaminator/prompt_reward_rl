@@ -1,7 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor
-
 from neptune.new import Run
-from pydantic import BaseModel
 from slist import Slist
 
 from api.logged_fine_tune import (
@@ -11,29 +8,16 @@ from api.logged_fine_tune import (
 )
 from api.openai_fine_tune import ModelId, FineTuneParams
 from api.prompt_completion import PromptCompletion
-from api.redis_cache import redis_cache
-from evaluate.classification import (
-    format_dialogue_into_reward_prompt,
-    get_positive_class_proba,
-)
 from parsing.parse_raw import AnthropicRawFormat
 from settings import (
-    OFFLINE_SEPARATE_POLICY_NEPTUNE_PROJECT,
     BEHAVIORAL_CLONING_NEPTUNE_PROJECT,
 )
-from train.policy_prompt_formatter import (
-    PolicyPromptFormatter,
-    RewardAtBottomFormatter,
-    RewardAtTopFormatter,
-    DuplicateRewardAtBottomFormatter,
+from train.prompt_formatters.policy_prompt_formatter import (
     NoRewardFormatter,
 )
-from train.reward_models import HelpfulHarmlessReward, DialogueWithReward
+from train.rewards import HelpfulHarmlessReward, DialogueWithReward
 from train.separators import END_TOKEN
 from train.train_helpful_reward_model import get_helpful_train
-from train.train_joint_reward_model import get_harmless_helpful_train
-from retry import retry
-from openai.error import RateLimitError
 
 
 def train(

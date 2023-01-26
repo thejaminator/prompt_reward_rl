@@ -1,17 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import Tuple
 
 from pydantic import BaseModel
-from slist import Slist
 
 from api.prompt_completion import PromptCompletion
-from train.policy_prompt_formatter import split_last_assistant_response
+from train.prompt_formatters.policy_prompt_formatter import split_last_assistant_response
 from train.separators import (
     START_REWARD_SEPARATOR,
-    end_prompt_seperator,
-    END_REWARD_SEPARATOR,
+    END_PROMPT_SEPARATOR,
 )
-from train.reward_models import DialogueWithJointReward, HelpfulHarmlessReward
+from train.rewards import DialogueWithJointReward
+
 
 # TODO: Refactor this to reuse code from policy_prompt_formatter.py
 # This can be done by making it generic over the reward type
@@ -67,13 +65,13 @@ class JointRewardAtBottomFormatter(JointPolicyPromptFormatter):
         )
 
         dialogue_with_reward: str = (
-            before_last_lines_formatted
-            + "\n"
-            + START_REWARD_SEPARATOR
-            + "\n"
-            + f"Reward: {reward_2dp}"
-            + end_prompt_seperator
-            + "\n\n"
+                before_last_lines_formatted
+                + "\n"
+                + START_REWARD_SEPARATOR
+                + "\n"
+                + f"Reward: {reward_2dp}"
+                + END_PROMPT_SEPARATOR
+                + "\n\n"
         )
         completion = last_line
         return JointPolicyPromptInfo(
@@ -109,7 +107,7 @@ class JointNoRewardFormatter(JointPolicyPromptFormatter):
         before_last_lines_formatted = "\n\n".join(before_last_lines)
 
         dialogue_with_reward: str = (
-            before_last_lines_formatted + "\n" + end_prompt_seperator + "\n\n"
+                before_last_lines_formatted + "\n" + END_PROMPT_SEPARATOR + "\n\n"
         )
         completion = last_line
         return JointPolicyPromptInfo(

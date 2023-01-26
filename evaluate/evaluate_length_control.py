@@ -4,10 +4,7 @@ from typing import Optional
 from slist import Slist
 
 from api.dataset_paths import anthropic_harmless_test_path, anthropic_helpful_test_path
-from api.set_key import set_openai_key
-from evaluate.classification import get_pair_predicted_result
 from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
-from settings import OPENAI_KEY
 
 
 def get_harmless_test() -> Slist[AnthropicRawFormat]:

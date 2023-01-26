@@ -14,7 +14,7 @@ from api.logged_fine_tune import (
 )
 from api.openai_fine_tune import FineTuneParams, ModelId
 from api.prompt_completion import PromptCompletion
-from evaluate.classification import format_dialogue_into_reward_prompt
+from api.classification import format_dialogue_into_reward_prompt
 from parsing.parse_raw import AnthropicRawFormat, get_raw_anthropic
 from train.separators import POSITIVE_TOKEN, NEGATIVE_TOKEN
 
